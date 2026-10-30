@@ -1,0 +1,20 @@
+# Claude Code private/local files
+.claude/settings.local.json
+.claude/*.local.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large data (keep datasets out of Git)
+data/raw/
+*.mp4
+*.avi
+*.pt
+*.onnx
+
+# OS / editor
+.DS_Store
+Thumbs.db

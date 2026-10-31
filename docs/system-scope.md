@@ -1,4 +1,4 @@
-# System Scope: Autonomous Feral Pigeon Deterrent System (v1.4)
+# System Scope: Autonomous Feral Pigeon Deterrent System (v1.5)
 
 ## Goal
 An autonomous turret that detects perched or landing feral pigeons up to 50 ft (15 m), confirms them with a telephoto camera, aims a visible deterrent, and measures both its engineering performance and its deterrence effect.
@@ -11,7 +11,7 @@ The laptop sends high-level commands (aim at angle, jog, upload zone, request fi
 BOOT -> HOMING -> DISARMED -> (key on + dashboard Arm) -> SCANNING -> CANDIDATE (wide camera, low threshold) -> SLEW -> CONFIRM (telephoto, high threshold) -> TRACK -> DETER -> COOLDOWN -> SCANNING
 Periodic HOMING (see Homing) and CENSUS sweeps (see Census sweep) run only in safe states.
 ZONE_SETUP: manual jogging to draw no-fire zones; effector hard-disabled by the ESP32.
-Any state -> SAFE/ERROR on fault, lost heartbeat, person detected, key off, limit or zone violation, or homing drift.
+Any state -> SAFE/ERROR on fault, lost heartbeat, key off or homing drift. A person detected, or a beam direction that would be inside a no-fire zone plus margin or outside the elevation limits, is not a fault and does not change the state: the ESP32 denies the fire request with a reason, or cuts the effector at once if it is on.
 
 ## Hardware (v1)
 - Turret head, triangular layout: Camera Module 3 standard (~66 deg horizontal), HQ Camera with 25 mm lens, laser effector (5 mW or less in development; 50 mW for approved field trials)

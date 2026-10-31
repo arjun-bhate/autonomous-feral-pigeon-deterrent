@@ -94,6 +94,13 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 - D-69 [DECIDED] The dashboard API shows denial reasons by name only. Numeric codes and priorities never appear there.
 - D-70 [DECIDED] A running effector is also cut when the zone store becomes unreadable, through the general invalid-store rule.
 
+## K. Feature 001 protocol fixes (2026-10-31)
+- D-71 [DECIDED] The request time-to-live is a precondition checked once when a fire request arrives (FR-025), not an invariant re-checked during a shot. While the effector is on, the device re-checks priorities 1 to 12 except 9 (REQUEST_EXPIRED). FR-026 in spec.md was reworded by the owner to say so. Why: re-checking it would cut every valid shot longer than the remaining TTL and log a false interlock event.
+- D-72 [DECIDED] DISARM is accepted in every state and replies OK. In BOOT, HOMING and SAFE_ERROR it changes nothing else; in every other state it moves the device to DISARMED, cuts the effector and discards any partial zone upload. Why: homing always runs to completion, and DISARM stays always accepted (FR-020).
+- D-73 [DECIDED] granted_on_ms in the FIRE_REQUEST GRANTED reply is a u32 in the device time base. Only ZONE_BEGIN, ZONE_POINT and ZONE_COMMIT reset the zone-upload idle timer.
+- D-74 [DECIDED] Line endings are pinned to LF with .gitattributes (* text=auto eol=lf). Why: a Windows checkout would otherwise convert files to CRLF and break byte-exact tests such as the reason-code lock.
+- D-75 [DECIDED] Design questions are raised only if they block the current task; otherwise they are logged as open items and settled by the task's test. Why: documents had reached the point of diminishing returns.
+
 ## Open decisions
 1. Where the device sits relative to the perch height, which sets the elevation limits.
 2. The dome's optical test (camera distortion, laser reflection) when it arrives.
@@ -110,3 +117,5 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 13. Whether the hold-off and watchdog defaults (D-62) should differ, decided in feature 004.
 14. Whether a re-engage delay of 0 (D-66) is allowed in production configuration, decided in feature 006.
 15. Whether the wire format needs a protocol version field so a version mismatch is detected at run time (D-68), decided in feature 003.
+16. Exact behaviour of the zone-upload idle timer at the 5000 ms boundary, decided when firmware conformance matters (feature 003).
+17. DISARM during BOOT has no scenario vector yet; add one in the first task that touches DISARM.

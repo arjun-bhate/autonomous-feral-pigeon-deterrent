@@ -52,7 +52,7 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 - D-37 [OPEN] Fallback if the laser proves ineffective: a visible light beacon or strobe (below 2 flashes per second, never aimed at windows). Water spray was considered and not chosen.
 - D-38 [DECIDED] No-fire zones: drawn on a dashboard page by jogging the telephoto crosshair (coarse and fine) and dropping points with a key; the polygon closes automatically to point 1. Each polygon is independent and deleted as a whole. There is no editing, so a zone is recreated instead. Zones are stored only on the ESP32, in motor angles relative to the homed zero, never in camera pixels. The video overlay is never used for a safety decision.
 - D-39 [DECIDED] Zone rules: at least 3 points; self-crossing polygons are rejected; uploads are atomic with a checksum; safety margin is 0.5 degrees plus the measured aiming error; a corrupted zone store blocks all firing.
-- D-40 [PROVISIONAL] After the heartbeat is lost the device goes to a safe/error state and never re-arms by itself.
+- D-40 [SUPERSEDED by D-51] After the heartbeat is lost the device goes to a safe/error state and never re-arms by itself.
 
 ## F. Dashboard, data and experiment
 - D-41 [DECIDED] A comprehensive multi-page dashboard. Overview: live video with the detection overlay, pan and tilt angles, system state, recent log, and laptop and Pi health. Other pages: Detections and Accuracy, Activity (heat map and time of day), Deterrence Log, Observability, Calibration, Safety.
@@ -65,6 +65,35 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 ## G. Feature 001 placeholder values (simulated device only)
 - D-47 [PROVISIONAL] Heartbeat 200 ms; watchdog 1 s; person-clear hold-off 1 s; fire time-to-live 500 ms; on-time cap 2 s per shot and 10 s per minute; simulated aiming error 0.2 degrees; up to 8 zones of 16 points. Confirmed as written by the owner on 2026-10-31. The 2 s per-shot cap is longer than the owner's earlier idea of about 1 s and can be lowered later.
 
+## H. Feature 001 plan decisions (2026-10-31)
+- D-48 [DECIDED] Person detected is a fire inhibit, not a fault. While the latest heartbeat reports a person, the ESP32 denies fire requests and cuts the effector if it is on. The device keeps its state and keeps scanning. No fault is latched. Why: the constitution says deny and cut and names no fault state, and a person walking past should not force a manual recovery.
+- D-49 [DECIDED] Re-engage delay: after a person is no longer reported, fire stays denied until person-clear has been reported continuously for a set delay. The ESP32 measures it on its own clock. A new person report, or a missing or stale status, restarts it. When it ends, the inhibit lifts and a new fire request can be granted if every other check passes. The device never fires on its own and never resumes a cut shot. This is separate from the person-clear hold-off in D-47, which limits how old a status may be. Why: gives the person time to leave the area, and stops rapid on/off cycling if the detector flickers.
+- D-50 [PROVISIONAL] The re-engage delay is 5 seconds, configurable. Chosen by the owner without field data. Revisit in features 006 and 008.
+- D-51 [DECIDED] No condition creates a latched fault in feature 001. A denied fire request is a normal reply that names one reason and changes no state. If the effector is on when a condition lapses, it is cut and the same reason is reported. Heartbeat loss and key off still move the device to SAFE_ERROR (FR-027 and the scope document), but recovery is automatic when the cause ends and the device lands in DISARMED, never re-arming by itself. Whether homing failure, homing drift or an internal error should latch is decided in feature 003. Supersedes D-40. Why: safety comes from staying DISARMED until the operator arms, not from remembered faults.
+- D-52 [DECIDED] In the scope document, "zone violation" and "limit violation" mean a fire request denied because the beam would be inside a no-fire zone plus margin or outside the elevation limits. It is a denial, not a fault. Every denial names exactly one reason, chosen by a fixed priority order, and each reason names one cause.
+- D-53 [DECIDED] docs/system-scope.md is amended to v1.5: person detected and limit or zone violation are removed from the SAFE/ERROR triggers and described as denials. Why: the plan and the scope document must not disagree (D-11).
+- D-54 [DECIDED] Key off goes to SAFE_ERROR from every state, including ZONE_SETUP, as the scope document says. The trigger is the change from on to off. Recovery is automatic when the key is back on, landing in DISARMED. Fire arbitration also reads the live key level at request time. Why: one rule for every state, because exceptions in a safety state machine are where bugs hide.
+- D-55 [DECIDED] DISARM is the only way to abort a zone upload; there is no ZONE_ABORT message. A partial upload lives in a staging buffer and is discarded on every exit except an accepted ZONE_COMMIT. A rejected ZONE_BEGIN has no effect. Why: DISARM is already always accepted, there are fewer message types, and fire decisions read only the validated zone store.
+- D-56 [SUPERSEDED by D-61] ZONE_STORE_INVALID is computed from the stored zones each time (checksum check), not kept as a fault bit. It clears when ZONE_CLEAR leaves a valid store; an empty store is valid. Why: one source of truth, so the denial reason can always be reported.
+- D-57 [DECIDED] The fault bits HOMING_FAILED and INTERNAL are reserved for feature 003. Nothing sets them in feature 001, and a test confirms they stay clear.
+- D-58 [DECIDED] Feature 001 plan choices confirmed: up to 8 zones of 16 points; binary frames with COBS framing and CRC-16, angles in hundredths of a degree; a fixed denial priority order with one reason per denial; the ESP32 judges a fire by its own measured angles, not the direction in the request; zone upload timeout 5 s, simulated homing 3 s, acknowledgement timeout 500 ms; percentiles by nearest rank; test-only state injection for scenario vectors, compiled out of production firmware. Why: fixed sizes and orders make behaviour predictable and testable, and the device never trusts the sender for a safety check.
+- D-59 [OPEN] Key switch debouncing and handling of very short key glitches on real hardware. Decided in feature 006.
+
+## I. Feature 001 plan refinements (2026-10-31)
+- D-60 [DECIDED] Denial reason codes are permanent. Each reason has a fixed numeric code that never changes, and the priority order is stored separately. Codes are never reused, a new reason gets the next unused number, and adding or reordering rungs never changes an existing code. PERSON_CLEAR_DELAY has code 14; the other 13 keep their earlier values. Why: the protocol is a contract between the Python simulator now and the ESP32 firmware later, and a code that changes when the priority order changes would make the two sides silently disagree.
+- D-61 [DECIDED] Zone store validity is computed from the stored bytes each time. An unreadable store counts as invalid. If it becomes readable again and every checksum matches, it is valid again without ZONE_CLEAR. Corrupted bytes stay invalid until ZONE_CLEAR leaves a valid store. An empty store is valid. Supersedes D-56. Why: one source of truth, and a store that passes its checksums is valid by definition.
+- D-62 [PROVISIONAL] The person-clear hold-off and the heartbeat watchdog both default to 1000 ms. With equal values a silent laptop shows HEARTBEAT_LOST first, and the stale-status denial PERSON_NOT_CLEAR is reachable only when the hold-off is below the watchdog (tests lower it). Both outcomes fail closed. Re-tune in feature 004 with measured Wi-Fi jitter.
+- D-63 [DECIDED] Timing boundaries, all on the device's own clock: a person-clear status is fresh at an age of exactly the hold-off and stale 1 ms later; a fire request is denied before the re-engage delay has elapsed and may be granted at exactly the delay.
+- D-64 [DECIDED] A clear period starts at the receive time of the first accepted clear heartbeat after a person was present. A person report, a stale status, boot, heartbeat loss and SAFE_ERROR recovery restart it.
+- D-65 [DECIDED] A cut caused by a person ends the shot (DETER to SCANNING). The device stays armed, and a cut shot is never resumed without a new fire request.
+- D-66 [PROVISIONAL] A re-engage delay of 0 disables the delay. Allowed for now; whether production configuration may use 0 is decided in feature 006.
+
+## J. Feature 001 plan additions by Claude Code, confirmed by the owner (2026-10-31)
+- D-67 [DECIDED] Reason codes live in a machine-readable file (protocol/reason-codes.json) with a locked snapshot (tests/contract/reason_codes_lock.json). The lock test compares the table against the snapshot, not against the file itself, and a new reason is accepted only at the next unused number. Why: an accidental renumbering fails the build instead of silently breaking the contract.
+- D-68 [DECIDED] The protocol has a document-level version (0.1), recorded in the scenario vector files. The permanence rule applies in principle to every wire identifier (message types, state codes, fault bits, reject codes), but only the reason-code table has a lock test for now.
+- D-69 [DECIDED] The dashboard API shows denial reasons by name only. Numeric codes and priorities never appear there.
+- D-70 [DECIDED] A running effector is also cut when the zone store becomes unreadable, through the general invalid-store rule.
+
 ## Open decisions
 1. Where the device sits relative to the perch height, which sets the elevation limits.
 2. The dome's optical test (camera distortion, laser reflection) when it arrives.
@@ -75,3 +104,9 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 7. Detector model and version (decided in the feature 002 plan).
 8. Whether ROS 2 is needed (D-23).
 9. Whether the 2 s per-shot cap (D-47) should be lowered.
+10. Key switch debouncing and short glitches (D-59), decided in feature 006.
+11. Whether homing failure, homing drift or an internal error should latch, decided in feature 003.
+12. Whether the 5 s re-engage delay (D-50) is right, to be checked with field data in features 006 and 008.
+13. Whether the hold-off and watchdog defaults (D-62) should differ, decided in feature 004.
+14. Whether a re-engage delay of 0 (D-66) is allowed in production configuration, decided in feature 006.
+15. Whether the wire format needs a protocol version field so a version mismatch is detected at run time (D-68), decided in feature 003.

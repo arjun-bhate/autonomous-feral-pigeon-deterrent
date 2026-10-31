@@ -55,8 +55,7 @@ Fire arbitration:
 - A fire request MUST be granted only when ALL of the following are true: the physical arm
   key is on; the dashboard is armed; the device is homed; the Pi heartbeat is alive; the beam
   direction is inside the elevation limits and outside every no-fire zone expanded by the
-  safety margin; the zone store is valid; the device is not in ZONE_SETUP; and the per-shot
-  and per-minute on-time limits are not exceeded. Otherwise it MUST be denied with a reason.
+  safety margin; the zone store is valid; the device is not in ZONE_SETUP; and the per-shot on-time limit is not exceeded and the post-shot cooldown has elapsed. Otherwise it MUST be denied with a reason.
 - While the effector is on, the ESP32 MUST keep checking these conditions and MUST cut the
   effector the moment any of them lapses.
 
@@ -204,4 +203,4 @@ outside the home network, and automatic mount detection.
 - CLAUDE.md provides runtime working rules for the coding assistant and MUST remain consistent
   with this constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-10-31
+**Version**: 1.1.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-10-31

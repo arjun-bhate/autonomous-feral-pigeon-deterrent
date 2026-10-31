@@ -119,7 +119,7 @@ The operator opens an Observability page and sees metrics of three kinds: counte
 
 The developer starts a simulated ESP32 that accepts every command the real device will, validates each one, and replies exactly as the real device must. It holds its own state, angles, faults, key state and zone store, and it alone decides whether a fire request is granted or denied, always giving a specific reason when it denies.
 
-The commands are: home, move, jog, heartbeat, arm and disarm (with key state), upload zone (points, then a commit with a checksum), delete zone, list zones, clear zones, and fire request.
+The commands are: home, move, jog, heartbeat, arm and disarm (with key state), upload zone (points, then a commit with a checksum), delete zone, list zones, clear zones, fire request, and fire stop.
 
 Heartbeats carry a person-clear status. Fire requests carry a time-to-live. A fire request is granted only if every condition holds; otherwise it is denied with a specific reason.
 
@@ -137,7 +137,7 @@ Heartbeats carry a person-clear status. Fire requests carry a time-to-live. A fi
 6. **Given** any one condition fails, **When** a fire request arrives, **Then** it is denied with the reason for that condition (see the Fire Denial Reasons in the requirements).
 7. **Given** the latest heartbeat reports a person, or no person-clear status has arrived within the hold-off time, **When** a fire request arrives, **Then** it is denied with reason PERSON_NOT_CLEAR.
 8. **Given** a fire request whose time-to-live has passed by the time it arrives, **When** it is processed, **Then** it is denied with reason REQUEST_EXPIRED.
-9. **Given** the simulated effector is on, **When** any fire condition lapses (heartbeat lost, person reported, key turned off, beam enters a margin region, on-time limit reached), **Then** the effector is cut immediately and the event is logged and counted.
+9. **Given** the simulated effector is on, **When** any fire condition lapses (heartbeat lost, person reported, key turned off, beam enters a margin region), **Then** the effector is cut immediately and the event is logged and counted.
 10. **Given** the heartbeat stops, **When** the watchdog time passes, **Then** motion stops, the effector is off, and the state becomes SAFE/ERROR with a fault reported.
 11. **Given** a valid zone upload (points, then commit with a correct checksum), **When** committed, **Then** the zone is stored whole and appears in the list.
 12. **Given** an upload that is incomplete, has a wrong checksum, has fewer than 3 points, or self-crosses, **When** committed or abandoned, **Then** nothing is stored, the previously stored zones are unchanged, and a specific error is returned.
@@ -200,6 +200,7 @@ The developer has a written protocol definition covering message types, framing,
 - While DISARMED: denied (not armed).
 - While in ZONE_SETUP: denied; the effector is hard-disabled in this state.
 - While in SAFE/ERROR: denied with the active fault.
+- While in COOLDOWN: denied COOLDOWN_ACTIVE; the effector is off.
 - Several conditions fail at once: exactly one reason is returned, chosen by a documented priority order, and the test for each reason makes only that condition fail.
 
 **Storage**
@@ -232,18 +233,18 @@ The developer has a written protocol definition covering message types, framing,
 
 **Simulated ESP32 and safety authority**
 
-- **FR-015**: A software simulator of the ESP32 MUST accept the full command set: home, move, jog, heartbeat, arm, disarm, upload zone (points then commit), delete zone, list zones, clear zones, and fire request.
+- **FR-015**: A software simulator of the ESP32 MUST accept the full command set: home, move, jog, heartbeat, arm, disarm, upload zone (points then commit), delete zone, list zones, clear zones, fire request, and fire stop (FR-050).
 - **FR-016**: The simulator MUST validate every message (framing, checksum, sequence number, known type, field ranges) and MUST reject any invalid message without acting on it.
 - **FR-017**: The simulator MUST start in DISARMED after booting and homing, and MUST NOT accept motion or arming before homing completes.
 - **FR-018**: The simulator MUST enforce soft angle limits (pan 240 degrees, tilt 80 degrees of travel) and refuse moves beyond them.
 - **FR-019**: The simulator MUST accept a simulated key state as an input that a developer or test can set, and MUST report the key state.
 - **FR-020**: Arming MUST require the key on and the device homed; otherwise it MUST be refused with a specific reason. Disarming MUST always be accepted.
 - **FR-021**: The simulator MUST be the only component that decides whether a fire request is granted. The dashboard, the laptop backend and any other component MUST NOT contain a code path that grants or performs a fire, and the laptop side MUST treat the simulator's reply as the only authority.
-- **FR-022**: A fire request MUST be granted only when ALL of these are true: the key is on; the device is armed; the device is homed; the heartbeat is alive; the latest heartbeat reports the person clear and arrived within the hold-off time; person-clear has been reported continuously for at least the re-engage delay (FR-048); the request's time-to-live has not expired; the beam direction is within the elevation limits and outside every stored zone expanded by the safety margin; the zone store is valid; the device is not in ZONE_SETUP; and the per-shot and per-minute on-time limits are not exceeded. Otherwise it MUST be denied with a specific reason.
-- **FR-023**: Fire Denial Reasons: the protocol MUST define a distinct, named reason for each failed condition, at least: KEY_OFF, NOT_ARMED, NOT_HOMED, HEARTBEAT_LOST, PERSON_NOT_CLEAR, PERSON_CLEAR_DELAY, REQUEST_EXPIRED, ELEVATION_LIMIT, IN_ZONE_MARGIN, ZONE_STORE_INVALID, ZONE_SETUP, ON_TIME_LIMIT, RATE_LIMIT, FAULT_ACTIVE. When more than one fails, exactly one reason is returned according to a documented priority order.
+- **FR-022**: A fire request MUST be granted only when ALL of these are true: the key is on; the device is armed; the device is homed; the heartbeat is alive; the latest heartbeat reports the person clear and arrived within the hold-off time; person-clear has been reported continuously for at least the re-engage delay (FR-048); the request's time-to-live has not expired; the beam direction is within the elevation limits and outside every stored zone expanded by the safety margin; the zone store is valid; the device is not in ZONE_SETUP; the requested maximum shot duration does not exceed the per-shot limit; and no cooldown is running (FR-049). Otherwise it MUST be denied with a specific reason. A request whose maximum shot duration is below 500 ms is rejected as out of range.
+- **FR-023**: Fire Denial Reasons: the protocol MUST define a distinct, named reason for each failed condition, at least: KEY_OFF, NOT_ARMED, NOT_HOMED, HEARTBEAT_LOST, PERSON_NOT_CLEAR, PERSON_CLEAR_DELAY, REQUEST_EXPIRED, ELEVATION_LIMIT, IN_ZONE_MARGIN, ZONE_STORE_INVALID, ZONE_SETUP, ON_TIME_LIMIT, COOLDOWN_ACTIVE, FAULT_ACTIVE. When more than one fails, exactly one reason is returned according to a documented priority order.
 - **FR-024**: Every heartbeat MUST carry a person-clear status, a sequence number and a timestamp. The simulator MUST treat a missing or old person-clear status as "person present" (fail closed) once the hold-off time has passed.
 - **FR-025**: Every fire request MUST carry a time-to-live; the simulator MUST deny any request that arrives after its time-to-live has expired with REQUEST_EXPIRED.
-- **FR-026**: While the simulated effector is on, the simulator MUST keep checking the fire conditions that can lapse during a shot (every FR-022 condition except the request time-to-live, which is checked once when the request arrives, FR-025) and cut the effector at once when any of them lapses, logging the event and counting it as an interlock event.
+- **FR-026**: While the simulated effector is on, the simulator MUST keep checking the fire conditions that can lapse during a shot (every FR-022 condition except the request time-to-live, which is checked once when the request arrives, FR-025, and the duration and cooldown conditions, which cannot lapse during a shot) and cut the effector at once when any of them lapses, logging the event and counting it as an interlock event.
 - **FR-027**: A heartbeat watchdog MUST stop motion and switch the effector off when the heartbeat is lost, and move the state to SAFE/ERROR with a reported fault. Recovery MUST NOT re-arm automatically.
 - **FR-028**: The simulator MUST report its state, pan and tilt angles, key state, armed flag, homed flag, zone-store validity and active faults on request and when they change.
 - **FR-029**: The simulator MUST process a duplicated message at most once (same reply, no second action) and MUST reject an out-of-order (stale) message.
@@ -279,6 +280,11 @@ The developer has a written protocol definition covering message types, framing,
 
 - **FR-048**: After a person is no longer reported, the simulator MUST keep denying fire requests with reason PERSON_CLEAR_DELAY until person-clear has been reported continuously for at least the person re-engage delay. The delay is measured on the simulator's own clock, starting when the first clear status of the current clear period is accepted. A new person report, or a missing or stale person-clear status, MUST restart it. A request is denied if less than the delay has elapsed and may be granted at exactly the delay or later when every other condition holds. When the delay ends the simulator MUST NOT fire on its own and MUST NOT resume a shot that was cut; a new fire request is required. This delay is separate from the person-clear hold-off, which limits how old the latest status may be.
 
+**Cooldown and fire stop**
+
+- **FR-049**: Cooldown: when any shot ends, whether it reaches its requested maximum duration, is stopped by a fire stop (FR-050), or is cut for any cause that does not move the device to SAFE/ERROR, the simulator MUST start a cooldown of 5 s by default (configurable, provisional), measured on its own clock. The system state is COOLDOWN while the effector is off, then SCANNING when the cooldown has elapsed. While the cooldown is running every fire request MUST be denied with reason COOLDOWN_ACTIVE, the last reason in the priority order. A request is denied 1 ms before the cooldown has elapsed and may be granted at exactly the cooldown time or later when every other condition holds. The cooldown is separate from the person re-engage delay (FR-048); when both would deny a request, the documented priority order decides which reason is returned.
+- **FR-050**: Fire Stop: the simulator MUST accept a fire-stop command in every state, without fire arbitration. If the effector is on, it MUST switch it off at once, report that the host stopped the shot, and start the cooldown (FR-049). If no shot is running, it MUST reply OK and change nothing. A fire-stop command MUST never turn the effector on or lengthen a shot.
+
 ### Key Entities
 
 - **Health reading**: one measurement of CPU load, GPU load, RAM use or a temperature, with a time and a state (available or unavailable).
@@ -286,10 +292,10 @@ The developer has a written protocol definition covering message types, framing,
 - **Trace**: one engagement, identified by a trace id, made of ordered steps with a total duration.
 - **Step (span)**: one timed part of a trace (capture, encode, network, inference, decision, command, ESP32 acknowledgement, effector action), with start, duration and outcome.
 - **Metric**: a named counter, gauge or latency distribution, with unit and, for distributions, p50 and p95.
-- **Simulated device**: the stand-in ESP32, holding state, pan/tilt angles, key state, armed flag, homed flag, faults, effector status, on-time usage and the zone store.
+- **Simulated device**: the stand-in ESP32, holding state, pan/tilt angles, key state, armed flag, homed flag, faults, effector status, shot and cooldown timers and the zone store.
 - **Command message / reply**: a framed message with type, sequence number, payload and checksum, and the device's reply (accepted, rejected with an error code, granted, or denied with a reason).
 - **Heartbeat**: a periodic message carrying a person-clear status, a sequence number and a timestamp.
-- **Fire request**: a request to fire with a sequence number, a time-to-live and the beam direction; always answered granted or denied.
+- **Fire request**: a request to fire with a sequence number, a time-to-live, a maximum shot duration and the beam direction; always answered granted or denied.
 - **Zone**: an independent polygon of at least 3 pan/tilt points, with an id and a checksum, stored only in the simulated device.
 - **Zone store**: the set of zones plus its validity flag.
 - **Scenario test vector**: a recorded case with starting conditions, input messages and expected outcome.
@@ -308,7 +314,7 @@ The developer has a written protocol definition covering message types, framing,
 - **SC-007**: 100% of duplicated messages cause no second action, and 100% of out-of-order messages are rejected.
 - **SC-008**: Every fire-denial reason in the protocol has at least one automated test in which only that condition fails and the reply names that reason.
 - **SC-009**: In every test where any fire condition fails, 0 fire requests are granted, and in every test where all conditions hold, the request is granted.
-- **SC-010**: With the effector on, 100% of tests that lapse a condition (heartbeat lost, person reported, key off, margin entered, on-time limit) cut the effector within 100 milliseconds of simulated time.
+- **SC-010**: With the effector on, 100% of tests that lapse a condition (heartbeat lost, person reported, key off, margin entered) cut the effector within 100 milliseconds of simulated time.
 - **SC-011**: 100% of partial, wrong-checksum, too-few-point and self-crossing zone uploads leave the stored zones unchanged.
 - **SC-012**: A corrupted zone store results in 0 granted fire requests across the full test run.
 - **SC-013**: The operator can find all log entries of one engagement by trace id in under 10 seconds, and filters return exactly the matching entries in 100% of test cases.
@@ -319,6 +325,8 @@ The developer has a written protocol definition covering message types, framing,
 - **SC-018**: The full automated test suite passes on the owner's laptop with no hardware attached, and a new reader can build a valid message from the protocol document alone and predict the simulator's reply for a sample of 5 vectors.
 - **SC-019**: 0 code paths outside the simulated ESP32 can grant or perform a fire, verified by a review and an automated check of the laptop and dashboard code.
 - **SC-020**: In the automated tests, 100% of fire requests made 1 ms before the re-engage delay has elapsed are denied PERSON_CLEAR_DELAY; 100% made at exactly the delay, with every other condition holding, are granted; 100% of tests in which a person is reported again during the delay restart it; and 0 cut shots resume without a new fire request.
+- **SC-021**: In the automated tests, 100% of fire requests made while a cooldown is running, including 1 ms before it has elapsed, are denied COOLDOWN_ACTIVE; 100% made at exactly the cooldown time, with every other condition holding, are granted; 100% of shot endings (maximum duration reached, fire stop, and every cut that does not enter SAFE/ERROR) start a cooldown; and 0 shot endings that enter SAFE/ERROR start one.
+- **SC-022**: In the automated tests, 100% of fire-stop commands sent in each state the simulator enters are answered OK; with the effector on, 100% switch it off within 100 milliseconds of simulated time and start the cooldown; with no shot running, 100% leave the state, angles, faults and timers unchanged; and 0 fire-stop commands turn the effector on or lengthen a shot.
 
 ## Assumptions
 
@@ -326,7 +334,7 @@ The developer has a written protocol definition covering message types, framing,
 - **No Pi in this feature**: The simulator stands in for both the ESP32 and, for protocol purposes, the Pi relay. The laptop talks to the simulator directly. The "Pi heartbeat alive" condition is modelled as "laptop heartbeat alive", as the heartbeat carries the person-clear status. The relay path through the Pi is built in later features.
 - **Fire requests come only from test and developer tooling**: In this feature no component decides to fire. Fire requests are issued by automated tests and by a developer-triggered simulated engagement, and the simulator is the only decider. There is no Arm or Fire button on the Overview; the arm and key interface belongs to the Safety page in feature 006.
 - **Simulated key and effector**: The key state is an input that tests or a developer set, and the effector is a simulated on/off state with on-time tracking. No real laser, key or emergency stop exists.
-- **Configurable defaults (provisional)**: Heartbeat interval 200 ms; heartbeat-loss watchdog 1 s; person-clear hold-off 1 s; fire-request time-to-live 500 ms; per-shot on-time 2 s; per-minute on-time 10 s; simulated aiming error 0.2 degrees. These are starting values, set in the protocol document, tunable without changing the protocol, and re-baselined in features 003 and 006. Every value is named in the document so tests can set it.
+- **Configurable defaults (provisional)**: Heartbeat interval 200 ms; heartbeat-loss watchdog 1 s; person-clear hold-off 1 s; fire-request time-to-live 500 ms; per-shot on-time 5 s; cooldown 5 s; simulated aiming error 0.2 degrees. These are starting values, set in the protocol document, tunable without changing the protocol, and re-baselined in features 003 and 006. Every value is named in the document so tests can set it.
 - **Person re-engage delay (provisional)**: 5 s by default, configurable, set by the owner on 2026-10-31 and not yet validated against real behaviour; to be re-baselined in feature 006. It is a different value from the person-clear hold-off.
 - **Zone limits**: Defaults of 8 zones and 16 points per zone, taken from the suggestion in docs/system-scope.md. The final limits remain open decision 5 and are set in the plan.
 - **Aiming error**: Real aiming error is measured in a later feature. Here it is a configurable constant so the margin rule (0.5 degrees plus aiming error) is already tested.
@@ -348,7 +356,7 @@ Real camera video, detection, the Raspberry Pi, real motors, calibration, scan p
 |-----------|----------------------------|
 | I. Spec-driven, one task at a time | This is the approved-spec step before plan and tasks. Tests-first is required (FR-045). The feature uses its own branch. |
 | II. Reporting and explainability | The report follows CLAUDE.md. The protocol and vectors are written so the owner can explain each module (FR-038 to FR-042). |
-| III. Safety in layers, ESP32 authority | The simulator alone decides fire (FR-021, FR-022). Default DISARMED (FR-017). Full arbitration list and specific denial reasons (FR-022, FR-023). Fail-closed person inhibit and time-to-live (FR-024, FR-025). Continuous checking and effector cut (FR-026). Heartbeat watchdog and soft limits (FR-018, FR-027). Zone rules: stored only on the device, angles, atomic checksum, minimum 3 points, self-crossing rejected, 0.5 degrees plus aiming error margin, corrupted store blocks firing (FR-030 to FR-037). Laptop-side checks are never a safety layer (FR-021). The key and cut-off hardware, emergency stop and eye-safety rules are not in scope here. |
+| III. Safety in layers, ESP32 authority | The simulator alone decides fire (FR-021, FR-022). Default DISARMED (FR-017). Full arbitration list and specific denial reasons (FR-022, FR-023). Fail-closed person inhibit and time-to-live (FR-024, FR-025). Continuous checking and effector cut (FR-026). Heartbeat watchdog and soft limits (FR-018, FR-027). Cooldown and fire stop (FR-049, FR-050). Zone rules: stored only on the device, angles, atomic checksum, minimum 3 points, self-crossing rejected, 0.5 degrees plus aiming error margin, corrupted store blocks firing (FR-030 to FR-037). Laptop-side checks are never a safety layer (FR-021). The key and cut-off hardware, emergency stop and eye-safety rules are not in scope here. |
 | IV. Homing | The simulator homes on boot and cannot arm or move before it (FR-017). Simulated drift is a metric (FR-011). Real homing, periodic re-homing and sensor choice belong to feature 003. |
 | V. Observability by default | Structured logs for every component (FR-007), eight-step traces (FR-009), p50/p95 metrics (FR-010, FR-011), local storage and dashboard views (FR-012). |
 | VI. Testable without hardware | Mocks for every hardware-facing interface (FR-044), a simulator speaking the protocol with zone store and arbitration (FR-015 to FR-037), tests run on the laptop (FR-043), zone geometry unit-tested (FR-046). The replay harness belongs to feature 002. |

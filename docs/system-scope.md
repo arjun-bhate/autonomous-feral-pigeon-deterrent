@@ -1,11 +1,11 @@
-# System Scope: Autonomous Feral Pigeon Deterrent System (v1.5)
+# System Scope: Autonomous Feral Pigeon Deterrent System (v1.6)
 
 ## Goal
 An autonomous turret that detects perched or landing feral pigeons up to 50 ft (15 m), confirms them with a telephoto camera, aims a visible deterrent, and measures both its engineering performance and its deterrence effect.
 
 ## Command path
 Laptop -> Wi-Fi -> Raspberry Pi 5 -> USB serial -> ESP32.
-The laptop sends high-level commands (aim at angle, jog, upload zone, request fire). The Pi relays them and does not make safety decisions. The ESP32 is the authority for motion, homing, no-fire zones and every fire decision, and it replies with granted/denied and a reason.
+The laptop sends high-level commands (aim at angle, jog, upload zone, request fire, stop fire). The Pi relays them and does not make safety decisions. The ESP32 is the authority for motion, homing, no-fire zones and every fire decision, and it replies with granted/denied and a reason.
 
 ## States
 BOOT -> HOMING -> DISARMED -> (key on + dashboard Arm) -> SCANNING -> CANDIDATE (wide camera, low threshold) -> SLEW -> CONFIRM (telephoto, high threshold) -> TRACK -> DETER -> COOLDOWN -> SCANNING
@@ -17,7 +17,7 @@ Any state -> SAFE/ERROR on fault, lost heartbeat, key off or homing drift. A per
 - Turret head, triangular layout: Camera Module 3 standard (~66 deg horizontal), HQ Camera with 25 mm lens, laser effector (5 mW or less in development; 50 mW for approved field trials)
 - Raspberry Pi 5 (2 GB): capture, encode, stream (one stream at a time, 12-15 fps), command relay, health reporting, maximum focus on higher resolution with a minimum threshold of 12 fps.
 - ESP32 (motion, homing, zones, fire decisions), 2x TMC2208 drivers, 2 steppers (belt reduction about 4:1), homing sensors on both axes (type decided in feature 003)
-- Safety hardware: key switch (in series with laser power, state read by the ESP32), hardware on-time cutoff, emergency stop, power indicator LED
+- Safety hardware: key switch (in series with laser power, state read by the ESP32), hardware on-time cutoff (must be set at or above the firmware's per_shot_ms, the maximum duration of one shot), emergency stop, power indicator LED
 - Pan travel 240 deg, tilt travel 80 deg
 - Capsule enclosure with a fixed dome (not on the moving mechanism); pedestal and wall-mount stands with the same pickup points
 - One external cable (power); Wi-Fi to the laptop
@@ -44,8 +44,9 @@ Any state -> SAFE/ERROR on fault, lost heartbeat, key off or homing drift. A per
 - Zones are stored on the ESP32 (persistent memory) as pan/tilt motor angles relative to the homed zero, never in camera pixels. The laptop holds no authoritative copy. The dashboard displays what the ESP32 reports back and draws the overlay on the video from calibration; the overlay is never used for any safety decision.
 - Zone commands: UPLOAD_ZONE (points then commit with a checksum, atomic: a partial upload is discarded), DELETE_ZONE(id), LIST_ZONES, CLEAR_ZONES.
 - Creation rules: minimum 3 points, self-crossing polygons rejected, maximum number of zones and points set in the plan (suggested 8 zones of 16 points).
-- The ESP32 makes every fire decision. FIRE_REQUEST is granted only if all are true: key on; armed; homed; Pi heartbeat alive; beam direction (motor angles plus stored effector offset) inside elevation limits and outside every zone expanded by the safety margin; zone store valid; not in ZONE_SETUP; on-time and rate caps not exceeded. Otherwise FIRE_DENIED with a reason.
+- The ESP32 makes every fire decision. FIRE_REQUEST is granted only if all are true: key on; armed; homed; Pi heartbeat alive; beam direction (motor angles plus stored effector offset) inside elevation limits and outside every zone expanded by the safety margin; zone store valid; not in ZONE_SETUP; per-shot on-time limit not exceeded and post-shot cooldown elapsed. Otherwise FIRE_DENIED with a reason.
 - The ESP32 keeps checking while the effector is on and cuts it immediately if the beam enters a margin region or any condition lapses.
+- Each FIRE_REQUEST carries the shot's maximum duration, chosen by the operator from 500 to 5000 ms in 500 ms steps (the ESP32 checks the range, not the step). The shot ends at that maximum, or earlier on FIRE_STOP, which the ESP32 always accepts because it can only switch the effector off. Every shot end that does not enter SAFE/ERROR starts a cooldown (default 5 s, provisional, configurable); the state goes DETER -> COOLDOWN -> SCANNING, and fire requests are denied while it runs.
 - Safety margin: 0.5 deg plus measured aiming error. A corrupted zone store blocks all firing.
 - The laptop owns person detection and sends a person-clear status with every heartbeat. The ESP32 fails closed: no recent clear status means no firing, and any fire request carries a time-to-live. The laptop may pre-check zones for convenience, but this is not a safety layer.
 - Relocation: with no accelerometer the device cannot detect being moved, so relocation is a deliberate dashboard step. "Relocate" deletes all zones on the ESP32, marks calibrations 1-3 stale, and blocks arming until they are redone and zones are redrawn or "no zones required" is confirmed.

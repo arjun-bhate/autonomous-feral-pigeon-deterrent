@@ -101,8 +101,8 @@ When disabled these routes return 404. They are for the owner and tests. None of
 | POST `/api/dev/simulator/stop` | none | Stop it (Overview shows "unavailable") |
 | POST `/api/dev/key` | `{"on": true}` | Set the simulated key input |
 | POST `/api/dev/person` | `{"clear": false}` | Set the person-clear value that the client puts in every heartbeat (stands in for the future detector; default clear). The device then applies the person inhibit and re-engage delay itself |
-| POST `/api/dev/command` | `{"type": "MOVE", "fields": {...}}` | Send one protocol command through the normal client; returns the decoded reply. Accepts any type in the protocol including `ARM`, `DISARM` and `FIRE_REQUEST`; a fire request returns the device's GRANTED / DENIED reply unchanged |
-| POST `/api/dev/engagement` | `{"fire": true, "duration_ms": 200}` | Run one simulated engagement; returns `{"trace_id": "..."}` |
+| POST `/api/dev/command` | `{"type": "MOVE", "fields": {...}}` | Send one protocol command through the normal client; returns the decoded reply. Accepts any type in the protocol including `ARM`, `DISARM`, `FIRE_REQUEST` and `FIRE_STOP`; a fire request returns the device's GRANTED / DENIED reply unchanged |
+| POST `/api/dev/engagement` | `{"fire": true, "duration_ms": 500}` | Run one simulated engagement; `duration_ms` is the shot's maximum on-time and is passed to the device unchanged (the device accepts 500 up to its per-shot limit); returns `{"trace_id": "..."}` |
 | POST `/api/dev/zone-store/corrupt` | none | Corrupt one stored zone (test input) |
 | POST `/api/dev/sensors/{name}/fail` | `{"on": true}` | Make a health sensor unreadable (hang or error) |
 | POST `/api/dev/storage/fail` | `{"mode": "full" \| "locked" \| "ok"}` | Make the observability store fail, to see the warning |
@@ -114,3 +114,4 @@ When disabled these routes return 404. They are for the owner and tests. None of
 3. No response contains secrets or image data (FR-014).
 4. Denial reasons are always shown and returned by **name** (for example `KEY_OFF`); numeric wire codes and priorities never appear in the API or the pages.
 5. A slow or failing store must not slow these endpoints' live paths: `/ws/live` and `/api/device/status` read from memory.
+6. Shot duration and stopping: the operator control that offers 500 to 5000 ms in 500 ms steps belongs to a later feature (there is no fire control in this feature). The API passes `duration_ms` through unchanged, so dev tools can send any value and exercise the device's own range check (500 to its per-shot limit). `FIRE_STOP` is sent like any other command through `/api/dev/command`; the API never decides whether it takes effect. The `state` field can read `COOLDOWN`, and denials appear by name (`COOLDOWN_ACTIVE`), never by number.

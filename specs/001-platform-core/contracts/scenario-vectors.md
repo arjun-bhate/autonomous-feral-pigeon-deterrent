@@ -12,11 +12,11 @@
 | `protocol/vectors/fire_arbitration.json` | one vector per denial reason (only that condition fails), priority-order vectors, grant, continuous-check cuts |
 | `protocol/vectors/zones.json` | every zone rejection reason, atomicity, partial upload, delete, list, clear, corrupted store |
 | `protocol/vectors/timing.json` | one vector per timing rule |
-| `protocol/reason-codes.json` | not a vector file: the permanent denial-reason code table (name to number), used by the runner to resolve names and guarded by the checks in section 8 |
+| `protocol/reason-codes.json` | not a vector file: the permanent denial-reason code table (name, number and status `active` or `retired`), used by the runner to resolve names and guarded by the checks in section 8 |
 
 Every vector file also records `protocol_version` (the protocol version it was written for). Vectors name reasons (for example `REQUEST_EXPIRED`) and never write reason numbers; priority vectors name rungs.
 
-Coverage rule (FR-041, SC-017): a test fails if any denial reason, zone rejection code or timing rule in `contracts/protocol.md` has no vector whose `covers` names it. The same test also fails if any row of the "Leaving ZONE_SETUP" table (protocol.md 5.5, tags `setup:IN`, `setup:EXIT_1` to `setup:EXIT_8`) or any rule of protocol.md 5.2 and 5.6 (tags `key:*`) has no vector.
+Coverage rule (FR-041, SC-017): a test fails if any denial reason, zone rejection code or timing rule in `contracts/protocol.md` has no vector whose `covers` names it. The same test also fails if any row of the "Leaving ZONE_SETUP" table (protocol.md 5.5, tags `setup:IN`, `setup:EXIT_1` to `setup:EXIT_8`) or any rule of protocol.md 5.2 and 5.6 (tags `key:*`) has no vector. It also fails if any state in the FIRE_STOP table (protocol.md 5.4, tags `stop:STATE_*`) has no vector. Retired reasons need no denial vector.
 
 ## 2. A vector
 
@@ -33,7 +33,7 @@ Fields:
 | `expect` | final expectations |
 
 `initial` (all optional; unlisted fields take the "booted, homed, disarmed, key off, no zones, heartbeat fresh and clear" default):
-`state`, `homed`, `armed`, `key_on`, `pan_cdeg`, `tilt_cdeg`, `heartbeat_age_ms` (or `no_heartbeat`), `person_clear`, `person_clear_age_ms`, `clear_streak_ms` (how long the current clear period has lasted; the default is longer than `person_reengage_delay_ms`, so the re-engage delay has already elapsed), `zones` (list of `{zone_id, points}`), `zone_store_corrupt`, `zone_storage_unreadable`, `on_time_used_last_60s_ms`, `fault_mask`, `last_seq`.
+`state`, `homed`, `armed`, `key_on`, `pan_cdeg`, `tilt_cdeg`, `heartbeat_age_ms` (or `no_heartbeat`), `person_clear`, `person_clear_age_ms`, `clear_streak_ms` (how long the current clear period has lasted; the default is longer than `person_reengage_delay_ms`, so the re-engage delay has already elapsed), `zones` (list of `{zone_id, points}`), `zone_store_corrupt`, `zone_storage_unreadable`, `cooldown_remaining_ms` (a cooldown is running with this many ms left; absent means none), `fault_mask`, `last_seq`.
 
 `steps`, each with `at_ms` (time on the device clock since the start of the vector) and one `action`:
 
@@ -49,7 +49,7 @@ Fields:
 
 `expect_reply`: `{ "result": "DENIED", "code": "KEY_OFF", "data": { ... } }` or `"none"`.
 
-`expect` (final): any of `state`, `pan_cdeg`, `tilt_cdeg`, `armed`, `homed`, `effector_on`, `zones` (list of ids), `zone_store_valid`, `fault_mask`, `events` (ordered list of device events such as `EFFECTOR_EVENT cut cause=PERSON_NOT_CLEAR` with the time it must occur by, e.g. `within_ms: 100`), `counters` (e.g. `rejected.BAD_CRC: 1`).
+`expect` (final): any of `state`, `pan_cdeg`, `tilt_cdeg`, `armed`, `homed`, `effector_on`, `zones` (list of ids), `zone_store_valid`, `fault_mask`, `events` (ordered list of device events such as `EFFECTOR_EVENT cut cause=PERSON_NOT_CLEAR` or `EFFECTOR_EVENT stopped by host` with the time it must occur by, e.g. `within_ms: 100`), `counters` (e.g. `rejected.BAD_CRC: 1`).
 
 ## 3. Illustrative example (shape only)
 
@@ -143,7 +143,7 @@ Tags to use in `covers`: `setup:IN`, `setup:EXIT_1` .. `setup:EXIT_8`, `setup:NO
 
 ## 7. Person inhibit, denials-not-faults, store validity and reserved faults
 
-Ladder numbers are those in protocol.md section 6 (14 rungs). Unless a vector says otherwise it starts from "homed, armed, SCANNING, key on, store empty, heartbeats clear and fresh, clear period older than the re-engage delay", with a `FIRE_REQUEST` of 500 ms whose TTL has not expired. "No state change" means `expect` lists the same `state`, `armed` true, `fault_mask` 0. Files: `fire_arbitration.json` (all person, zone, elevation and store vectors), `timing.json` (the two timing tags), `framing_and_sequence.json` is unchanged.
+Ladder numbers are those in protocol.md section 6 (14 rungs). Unless a vector says otherwise it starts from "homed, armed, SCANNING, key on, store empty, no cooldown running, heartbeats clear and fresh, clear period older than the re-engage delay", with a `FIRE_REQUEST` of 500 ms whose TTL has not expired. "No state change" means `expect` lists the same `state`, `armed` true, `fault_mask` 0. Files: `fire_arbitration.json` (all person, zone, elevation and store vectors), `timing.json` (the two timing tags), `framing_and_sequence.json` is unchanged.
 
 Timing note for authors: with the default values the status hold-off and the heartbeat watchdog are both 1000 ms, so a silent laptop is reported first as `HEARTBEAT_LOST` (rung 1). Vectors that need a stale-but-not-lost status set `person_clear_holdoff_ms` below `watchdog_ms` in `config`.
 
@@ -152,8 +152,8 @@ Timing note for authors: with the default values the status hold-off and the hea
 | Vector id | Covers | What it does | Must show |
 |-----------|--------|--------------|-----------|
 | fire.deny.person_reported | `deny:PERSON_NOT_CLEAR`, `person:NO_STATE_CHANGE` | Latest heartbeat has `person_clear` 0; fire request | DENIED `PERSON_NOT_CLEAR` (rung 7); state, armed and `fault_mask` unchanged (no fault bit) |
-| fire.cut.person_while_on | `person:CUT`, `timing:person_clear_holdoff_ms` | A granted shot is running (DETER); a heartbeat with `person_clear` 0 arrives | `EFFECTOR_EVENT cut cause=PERSON_NOT_CLEAR` within 100 ms; effector off; state SCANNING (shot ended), armed still true; `fault_mask` 0; not SAFE_ERROR; one interlock count |
-| person.cut_shot_not_resumed | `person:NO_RESUME` | After the cut above the person is gone and time advances past the delay with heartbeats clear; then a new request | Effector stays off with no new request and no further `EFFECTOR_EVENT on`; a new `FIRE_REQUEST` after the delay is GRANTED and starts a new shot |
+| fire.cut.person_while_on | `person:CUT`, `timing:person_clear_holdoff_ms` | A granted shot is running (DETER); a heartbeat with `person_clear` 0 arrives | `EFFECTOR_EVENT cut cause=PERSON_NOT_CLEAR` within 100 ms; effector off; state COOLDOWN (shot ended, cooldown started; not SCANNING), armed still true; `fault_mask` 0; not SAFE_ERROR; one interlock count |
+| person.cut_shot_not_resumed | `person:NO_RESUME` | After the cut above the person is gone and time advances past the delay with heartbeats clear; then a new request | Effector stays off with no new request and no further `EFFECTOR_EVENT on`; a new `FIRE_REQUEST` after the delay (the cooldown from the cut is over by then) is GRANTED and starts a new shot |
 | person.stale_status | `deny:PERSON_NOT_CLEAR`, `timing:person_clear_holdoff_ms` | Config: hold-off 300, watchdog 1000. Clear heartbeats stop for 500 ms (status stale, heartbeat not lost); request during the gap | DENIED `PERSON_NOT_CLEAR`; no SAFE_ERROR |
 | person.stale_restarts_delay | `person:RESTART`, `timing:person_reengage_delay_ms` | Same config with delay 2000. After the gap a clear heartbeat arrives at T; requests at T + 1999 and T + 2000 | T + 1999: DENIED `PERSON_CLEAR_DELAY`; T + 2000: GRANTED. The first clear period (before the gap) does not count |
 | person.boot_no_status | `deny:HEARTBEAT_LOST` | Booted, no heartbeat accepted yet | DENIED `HEARTBEAT_LOST` (rung 1 first); after the first clear heartbeat, `PERSON_CLEAR_DELAY` until the delay |
@@ -175,9 +175,9 @@ Timing note for authors: with the default values the status hold-off and the hea
 |-----------|--------|--------------|-----------|
 | fire.deny.in_zone_margin | `deny:IN_ZONE_MARGIN`, `denial:NO_FAULT` | Direction inside a stored zone; request | DENIED `IN_ZONE_MARGIN` (rung 12); no state change; `fault_mask` 0. Then `MOVE` outside the margin and a new request is GRANTED, proving nothing was latched |
 | fire.deny.elevation_limit | `deny:ELEVATION_LIMIT`, `denial:NO_FAULT` | Config elevation max 4000, tilt 6000 | DENIED `ELEVATION_LIMIT` (rung 11); no state change; `fault_mask` 0 |
-| fire.cut.zone_margin_while_on | `interlock:IN_ZONE_MARGIN` | Shot running; `MOVE` into a zone margin | Cut cause `IN_ZONE_MARGIN` within 100 ms; effector off; state SCANNING, armed true; `fault_mask` 0 |
-| fire.ttl.not_rechecked_while_on | `interlock:NO_TTL_RECHECK` | `ttl_ms` 500, `duration_ms` 2000, `per_shot_ms` 2000; heartbeats clear every 200 ms; request issued at t = 0 and arriving at t = 0 is GRANTED; `advance` to t = 600, then to t = 1900, then to t = 2000 | At t = 600 and t = 1900: `effector_on` true, state DETER, no `EFFECTOR_EVENT cut`, zero interlock events. At t = 2000: `EFFECTOR_EVENT normal end`, state SCANNING. Nothing is cut with cause `REQUEST_EXPIRED` |
-| fire.cut.elevation_while_on | `interlock:ELEVATION_LIMIT` | Shot running; `MOVE` beyond the elevation limit but inside the soft limit | Cut cause `ELEVATION_LIMIT`; state SCANNING, armed true; `fault_mask` 0 |
+| fire.cut.zone_margin_while_on | `interlock:IN_ZONE_MARGIN` | Shot running; `MOVE` into a zone margin | Cut cause `IN_ZONE_MARGIN` within 100 ms; effector off; state COOLDOWN, armed true; `fault_mask` 0 |
+| fire.ttl.not_rechecked_while_on | `interlock:NO_TTL_RECHECK` | `ttl_ms` 500, `duration_ms` 2000, `per_shot_ms` 5000 (the default); heartbeats clear every 200 ms; request issued at t = 0 and arriving at t = 0 is GRANTED; `advance` to t = 600, then to t = 1900, then to t = 2000 | At t = 600 and t = 1900: `effector_on` true, state DETER, no `EFFECTOR_EVENT cut`, zero interlock events. At t = 2000: `EFFECTOR_EVENT normal end`, state COOLDOWN. Nothing is cut with cause `REQUEST_EXPIRED` |
+| fire.cut.elevation_while_on | `interlock:ELEVATION_LIMIT` | Shot running; `MOVE` beyond the elevation limit but inside the soft limit | Cut cause `ELEVATION_LIMIT`; state COOLDOWN, armed true; `fault_mask` 0 |
 
 ### 7.4 Zone-store validity (derived)
 
@@ -185,7 +185,7 @@ Timing note for authors: with the default values the status hold-off and the hea
 |-----------|--------|--------------|-----------|
 | store.empty_is_valid | `store:EMPTY_VALID` | No zones | Status `zone_store_valid` true; a request that passes all else is GRANTED |
 | fire.deny.zone_store_invalid | `deny:ZONE_STORE_INVALID`, `store:NOT_FAULT_ACTIVE` | `zone_store_corrupt` true, all else passes | DENIED `ZONE_STORE_INVALID` (rung 10), **not** `FAULT_ACTIVE`; `fault_mask` 0; `zone_store_valid` false |
-| store.invalid_cut_while_on | `interlock:ZONE_STORE_INVALID` | Shot running; `inject` `zone_store_corrupt` | Cut cause `ZONE_STORE_INVALID`; state SCANNING, armed true; `fault_mask` 0 |
+| store.invalid_cut_while_on | `interlock:ZONE_STORE_INVALID` | Shot running; `inject` `zone_store_corrupt` | Cut cause `ZONE_STORE_INVALID`; state COOLDOWN, armed true; `fault_mask` 0 |
 | store.clear_recovers | `store:CLEAR_RECOVERS` | State DISARMED, store corrupt; `ZONE_CLEAR`; then `ARM`; then a request | `ZONE_CLEAR` OK; `zone_store_valid` true; request GRANTED |
 | store.stays_invalid_without_clear | `store:NO_AUTO_CLEAR` | Store corrupt (bytes do not match their checksums); time advances 10 s with heartbeats; request | Still DENIED `ZONE_STORE_INVALID`; `zone_store_valid` false |
 | store.unreadable_then_readable | `store:UNREADABLE`, `store:READABLE_AGAIN` | One valid zone stored. Request; `inject` `zone_storage_unreadable` true; request; `inject` `zone_storage_unreadable` false, **no** `ZONE_CLEAR`; request | While unreadable: DENIED `ZONE_STORE_INVALID`, `zone_store_valid` false (and a shot already running is cut with that cause). After readable with matching checksums: `zone_store_valid` true and a request that passes everything else is GRANTED, with no `ZONE_CLEAR` sent |
@@ -201,15 +201,64 @@ Timing note for authors: with the default values the status hold-off and the hea
 
 `covers` tags added by this section (`store:UNREADABLE`, `store:READABLE_AGAIN` also): `person:NO_STATE_CHANGE`, `person:CUT`, `person:NO_RESUME`, `person:RESTART`, `person:BOUNDARY`, `priority:rung7_over_rung8`, `priority:rung8_over_rung9`, `denial:NO_FAULT`, `disarm:HOMING_NO_CHANGE`, `disarm:SAFE_ERROR_NO_CHANGE`, `interlock:*` (including `interlock:NO_TTL_RECHECK`), `store:*`, `fault:RESERVED_CLEAR`, `key:LIVE_LEVEL`, and `deny:PERSON_CLEAR_DELAY`, which joins the denial coverage rule in section 1. The coverage test also requires a vector for `timing:person_reengage_delay_ms` and `timing:person_clear_holdoff_ms`, and `timing:zone_upload_timeout_ms`.
 
+### 7.6 Shot duration, cooldown and FIRE_STOP
+
+Files: `fire_arbitration.json` (all vectors below) and `timing.json` (the `timing:cooldown_ms` and `timing:per_shot_ms` tags, which these vectors also carry). Starting point as in the start of section 7 (homed, armed, SCANNING, key on, store empty, heartbeats clear and fresh, no cooldown running), with `per_shot_ms` 5000 and `cooldown_ms` 5000 unless a vector says otherwise, and a `FIRE_REQUEST` whose `duration_ms` is 500 unless stated. `E` is the device time at which a shot ends. The coverage test requires a vector for `timing:cooldown_ms`, `timing:per_shot_ms` and for every row of the FIRE_STOP table (protocol.md 5.4, tags `stop:STATE_<NAME>`).
+
+**Shot duration**
+
+| Vector id | Covers | What it does | Must show |
+|-----------|--------|--------------|-----------|
+| duration.below_min_is_field_range | `duration:RANGE`, `duration:NO_HOLD` | Requests with `duration_ms` 499, then 0 (the old "hold" value) | Both REJECTED `FIELD_RANGE` (a reject, not DENIED); effector never on; state SCANNING; no event; a following request with 500 is GRANTED |
+| duration.min_and_max_accepted | `duration:RANGE` | Two runs: `duration_ms` 500, then (new run) 5000 | Both GRANTED; the shot ends by itself at t = 500 and at t = 5000 with `EFFECTOR_EVENT normal end`; state COOLDOWN; zero interlock events |
+| duration.above_per_shot_denied | `deny:ON_TIME_LIMIT`, `codes:DIFFERS_FROM_PRIORITY`, `duration:RANGE` | `duration_ms` 5001 | DENIED `ON_TIME_LIMIT` (rung 13); effector off; state SCANNING; `fault_mask` 0 |
+| duration.per_shot_configurable | `timing:per_shot_ms` | Config `per_shot_ms` 3000; requests with 3001, then (new run) 3000 | 3001: DENIED `ON_TIME_LIMIT`; 3000: GRANTED |
+| duration.step_not_checked | `duration:NO_STEP_CHECK` | `duration_ms` 750 (not a multiple of 500) | GRANTED; the shot ends at t = 750 (the 0.5 s step is a user-interface rule only) |
+| duration.shot_ends_at_max | `duration:SHOT_END` | `duration_ms` 1500; `advance` to 1499 and 1500 | t = 1499: effector on, DETER; t = 1500: `EFFECTOR_EVENT normal end`, effector off, state COOLDOWN, zero interlock events |
+
+**Cooldown**
+
+| Vector id | Covers | What it does | Must show |
+|-----------|--------|--------------|-----------|
+| cooldown.after_normal_end | `cooldown:START_NORMAL_END`, `timing:cooldown_ms` | Grant with `duration_ms` 500 at t = 0 (E = 500); `advance` to 499, 500, 5499, 5500 | t = 499: DETER, effector on. t = 500: COOLDOWN, effector off. t = 5499: still COOLDOWN. t = 5500: SCANNING |
+| fire.deny.cooldown_active | `deny:COOLDOWN_ACTIVE`, `codes:DIFFERS_FROM_PRIORITY` | Injected: state COOLDOWN, armed, `cooldown_remaining_ms` 2000; request | DENIED `COOLDOWN_ACTIVE` (rung 14, wire code 15); state still COOLDOWN; effector off; `fault_mask` 0; no event |
+| cooldown.boundary_exact | `cooldown:BOUNDARY`, `timing:cooldown_ms` | A shot ends normally at E. Request A at E + `cooldown_ms` - 1; request B at E + `cooldown_ms` (the heartbeat for that instant is processed first) | A: DENIED `COOLDOWN_ACTIVE`. B: GRANTED, effector on, state DETER |
+| cooldown.after_person_cut | `cooldown:START_CUT`, `person:CUT` | Config `person_reengage_delay_ms` 1000. Shot running; heartbeat with `person_clear` 0 at t = 100; clear heartbeats from t = 300; requests at t = 5099 and t = 5100 | `EFFECTOR_EVENT cut cause=PERSON_NOT_CLEAR` within 100 ms; state COOLDOWN (not SCANNING); armed true; `fault_mask` 0. t = 5099: DENIED `COOLDOWN_ACTIVE` (the delay is already over, so only the cooldown fails). t = 5100: GRANTED |
+| cooldown.disarm_cut_starts_timer | `cooldown:START_DISARM` | `duration_ms` 5000 granted at t = 0; `DISARM` at t = 1000; `ARM` at t = 1500; requests at t = 1600 and t = 6000 | `DISARM` reply OK, `EFFECTOR_EVENT cut cause=NOT_ARMED`, state DISARMED. After `ARM`: state SCANNING, but t = 1600: DENIED `COOLDOWN_ACTIVE`; t = 6000: GRANTED (the timer ran while DISARMED) |
+| cooldown.not_started_by_safe_error | `cooldown:NO_START_SAFE_ERROR` | Two runs, both with `person_reengage_delay_ms` 0. (a) Shot running; `set_key off` at t = 500; `set_key on` at t = 1000; `ARM` at t = 1500; request at t = 1600. (b) The same shot, but with the key left on: heartbeats stop at t = 500 (the watchdog fires at t = 1501) and resume at t = 2000, then `ARM` at t = 2500 and the request at t = 2600 | Cut cause `KEY_OFF` (a) or `HEARTBEAT_LOST` (b); state SAFE_ERROR, then DISARMED, then SCANNING after `ARM`. The final request (t = 1600 in a, t = 2600 in b) is GRANTED: no cooldown was started |
+| cooldown.interlocks_as_other_states | `cooldown:DISARM`, `cooldown:KEY_OFF`, `cooldown:HEARTBEAT_LOST` | Three runs, each from injected state COOLDOWN with `cooldown_remaining_ms` 3000: `DISARM`; `set_key off`; heartbeats stopped past `watchdog_ms` | `DISARM`: reply OK, state DISARMED, armed false. Key off: SAFE_ERROR, fault KEY_OFF. Heartbeat loss: SAFE_ERROR, fault HEARTBEAT_LOST. Same results as in any other state |
+| cooldown.zero_disables | `cooldown:ZERO` | Config `cooldown_ms` 0; shot ends normally at E; request at E | State SCANNING at E (no dwell in COOLDOWN); request GRANTED; `COOLDOWN_ACTIVE` never returned |
+| fire.priority.delay_over_cooldown | `priority:rung8_over_rung14` | Config `person_reengage_delay_ms` 7000, `cooldown_ms` 5000. Shot cut by a person at T; clear heartbeats from T + 200; request at T + 4000 | Both conditions fail: DENIED `PERSON_CLEAR_DELAY` (rung 8 over rung 14) |
+| fire.priority.on_time_over_cooldown | `priority:rung13_over_rung14` | Injected: cooldown running (`cooldown_remaining_ms` 2000); `duration_ms` 5001 | DENIED `ON_TIME_LIMIT` |
+| fire.priority.key_over_cooldown | `priority:rung5_over_rung14` | Injected: cooldown running, key off (live level; armed, SCANNING) | DENIED `KEY_OFF`, not `COOLDOWN_ACTIVE` (the cooldown is last) |
+| rate.no_per_minute_limit | `retired:RATE_LIMIT` | Requests with `duration_ms` 5000 at t = 0, t = 10000 and t = 20000 | All three GRANTED (15 s of on-time inside 25 s); no DENIED reply; no reply carries wire code 13 |
+
+**FIRE_STOP**
+
+| Vector id | Covers | What it does | Must show |
+|-----------|--------|--------------|-----------|
+| fire_stop.ends_shot_starts_cooldown | `stop:RUNNING`, `cooldown:START_STOP` | `duration_ms` 5000 granted at t = 0; `FIRE_STOP` at t = 1200; requests at t = 6199 and t = 6200 | Reply OK; `EFFECTOR_EVENT stopped by host` (cause 0) within 100 ms; effector off; state COOLDOWN; no `cut` event; zero interlock events; armed true; `fault_mask` 0; nothing happens at t = 5000. t = 6199: DENIED `COOLDOWN_ACTIVE`; t = 6200: GRANTED (counted from the stop) |
+| fire_stop.idle_ok_no_change | `stop:IDLE` | SCANNING, armed, no shot; `FIRE_STOP`; then an immediate request | Reply OK; state SCANNING; no event; effector never on because of the stop; the request is GRANTED (no cooldown was started) |
+| fire_stop.all_states | `stop:ALL_STATES`, `stop:STATE_BOOT`, `stop:STATE_HOMING`, `stop:STATE_DISARMED`, `stop:STATE_SCANNING`, `stop:STATE_COOLDOWN` | One run per state: BOOT (t = 0), HOMING (t = 1000, `homing_duration_ms` 3000), DISARMED, SCANNING, COOLDOWN (injected, `cooldown_remaining_ms` 3000) | Reply OK in each; state unchanged; homing still completes at t = 3000; in COOLDOWN the remaining time is unchanged (a request at the original end time is GRANTED, one 1 ms earlier is DENIED) |
+| fire_stop.in_safe_error | `stop:STATE_SAFE_ERROR` | Armed, key on; `set_key off`; then `FIRE_STOP` | Reply OK; state SAFE_ERROR; `fault_mask` still has KEY_OFF; armed false |
+| fire_stop.in_zone_setup | `stop:STATE_ZONE_SETUP` | Two runs. (a) `ZONE_BEGIN` (3 points), two points, `FIRE_STOP`, third point, `ZONE_COMMIT`. (b) `ZONE_BEGIN`, one point at t = 0, `FIRE_STOP` at t = 4000, then silence | (a) Reply OK; state ZONE_SETUP; the commit succeeds and the zone is stored. (b) The `FIRE_STOP` does not reset the idle timer: state DISARMED at t = 5100 |
+| fire_stop.duplicate_one_action | `stop:DUPLICATE`, `seq:DUPLICATE` | A shot running; `FIRE_STOP` (seq 9) at t = 1200; the same frame again at t = 1300 | The second reply is the cached OK; exactly one `stopped by host` event; the cooldown is still counted from t = 1200 |
+| fire_stop.bad_length | `stop:BAD_LENGTH` | A shot running; `FIRE_STOP` with one payload byte | REJECTED `BAD_LENGTH`; the shot continues |
+
+Tags added by this section: `duration:*`, `cooldown:*`, `stop:*`, `retired:RATE_LIMIT`, `priority:rung8_over_rung14`, `priority:rung13_over_rung14`, `priority:rung5_over_rung14`, and `deny:COOLDOWN_ACTIVE`, which joins the denial coverage rule in section 1.
+
 ## 8. Reason-code table checks (permanent codes)
 
 The permanent denial-reason codes (protocol.md section 6.1) are guarded by a coverage rule that runs with the vectors. It reads `protocol/reason-codes.json`, the table in protocol.md, and a locked snapshot kept with the tests (`tests/contract/reason_codes_lock.json`, the name-to-code pairs of the released protocol version). It fails if any of these is false:
 
 1. **Unique**: no two reasons share a code and no two share a name; every code is an integer from 1 to 255.
-2. **Document and file agree**: the Code column of the ladder table in protocol.md and `reason-codes.json` list exactly the same name-to-code pairs.
-3. **Unchanged**: every pair in the locked snapshot appears in the table with the same name and the same code. A changed, reassigned or removed pair fails. A new reason is accepted only if its code is the next unused number above every locked code; the lock is then updated by appending the pair. Changing what an existing code means requires a new protocol version (MAJOR), and the check fails if the table changed meaning without `protocol_version` being raised.
+2. **Document and file agree**: the Code and Status columns of the denial table in protocol.md and `reason-codes.json` list exactly the same name, code and status triples. The retired entry (`RATE_LIMIT`, 13) is in both, marked `retired`.
+3. **Unchanged**: every pair in the locked snapshot appears in the table with the same name and the same code. A changed, reassigned or removed pair fails, and so does a retired pair that is removed, given to another name, or changed back to active. A new reason is accepted only if its code is the next unused number above every locked code, retired codes included (the next is 16); the lock is then updated by appending the pair. Changing what an existing code means requires a new protocol version (MAJOR), and the check fails if the table changed meaning without `protocol_version` being raised.
 4. **Priority is independent of code**: a test reorders the priorities of a copy of the ladder and confirms every code stays the same.
-5. **Every reason has a vector**: each reason name has at least one `deny:<NAME>` vector (the existing denial coverage rule), and the runner compares the numeric `code` byte of every DENIED reply with the number that `reason-codes.json` gives for the expected reason name.
-6. **Priority is not mistaken for code**: the denial vectors for reasons whose code differs from their priority (`PERSON_CLEAR_DELAY`, `REQUEST_EXPIRED`, `ZONE_STORE_INVALID`, `ELEVATION_LIMIT`, `IN_ZONE_MARGIN`, `ON_TIME_LIMIT`, `RATE_LIMIT`) carry the tag `codes:DIFFERS_FROM_PRIORITY`, so a device that put the priority position on the wire fails them.
+5. **Every active reason has a vector**: each active reason name has at least one `deny:<NAME>` vector (the existing denial coverage rule), and the runner compares the numeric `code` byte of every DENIED reply with the number that `reason-codes.json` gives for the expected reason name.
+6. **Priority is not mistaken for code**: the denial vectors for reasons whose code differs from their priority (`PERSON_CLEAR_DELAY`, `REQUEST_EXPIRED`, `ZONE_STORE_INVALID`, `ELEVATION_LIMIT`, `IN_ZONE_MARGIN`, `ON_TIME_LIMIT`, `COOLDOWN_ACTIVE`) carry the tag `codes:DIFFERS_FROM_PRIORITY`, so a device that put the priority position on the wire fails them.
+7. **A retired code is never returned**: the runner fails any vector in which a DENIED reply has code byte 13, or an `EFFECTOR_EVENT` cut has cause 13 (checked in every vector, not only in `rate.no_per_minute_limit`). The table check also fails if code 13 is given to any name other than `RATE_LIMIT`, or if `RATE_LIMIT` is listed as active.
+
+Shape of `reason-codes.json` (illustration; the code numbers are those in protocol.md section 6): `{"protocol_version": "0.1", "reasons": [{"name": "KEY_OFF", "code": 5, "status": "active"}, {"name": "RATE_LIMIT", "code": 13, "status": "retired"}, {"name": "COOLDOWN_ACTIVE", "code": 15, "status": "active"}]}`.
 
 Because vectors never contain reason numbers, a deliberate code change touches one place (the table, the file and the lock) and the vectors keep working.

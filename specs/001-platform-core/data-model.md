@@ -94,7 +94,7 @@ Metrics that must exist (FR-011):
 | e2e_latency_simulated | sample | milliseconds | |
 | fire_requests_granted | counter | count | |
 | fire_requests_denied | counter | count | `reason` |
-| interlock_events | counter | count | `cause` (e.g. HEARTBEAT_LOST, PERSON_NOT_CLEAR, KEY_OFF, IN_ZONE_MARGIN, ON_TIME_LIMIT) |
+| interlock_events | counter | count | `cause` (e.g. HEARTBEAT_LOST, PERSON_NOT_CLEAR, KEY_OFF, IN_ZONE_MARGIN) |
 | protocol_messages_rejected | counter | count | `cause` |
 | homing_drift_simulated | sample | degrees | |
 
@@ -112,7 +112,7 @@ Summaries computed on read: counter total, latest gauge, and for samples: count,
 
 | Field | Type | Notes |
 |-------|------|-------|
-| state | enum (12) | BOOT, HOMING, DISARMED, SCANNING, CANDIDATE, SLEW, CONFIRM, TRACK, DETER, COOLDOWN, ZONE_SETUP, SAFE_ERROR. This feature enters only BOOT, HOMING, DISARMED, SCANNING, DETER, ZONE_SETUP, SAFE_ERROR. |
+| state | enum (12) | BOOT, HOMING, DISARMED, SCANNING, CANDIDATE, SLEW, CONFIRM, TRACK, DETER, COOLDOWN, ZONE_SETUP, SAFE_ERROR. This feature enters only BOOT, HOMING, DISARMED, SCANNING, DETER, COOLDOWN, ZONE_SETUP, SAFE_ERROR. |
 | pan_cdeg, tilt_cdeg | int16 | 0 to 24000 and 0 to 8000 (soft limits; relative to homed zero) |
 | homed | bool | false until homing completes |
 | key_on | bool | test input (hardware key in the real device) |
@@ -122,8 +122,8 @@ Summaries computed on read: counter total, latest gauge, and for samples: count,
 | last_heartbeat_rx | device ms | when the last accepted heartbeat arrived (device clock) |
 | person_clear | bool | `person_clear` field of the latest accepted heartbeat (1 = clear) |
 | clear_since | device ms or none | start of the current clear period: receive time of the first accepted clear heartbeat after a moment of "person present". None while a person is present. Used for the re-engage delay (protocol.md 5.3). Not a fault and not a state. |
-| on_time_shot_ms | int | on-time of the current shot |
-| on_time_window | list of (start, ms) | shots within the last 60 s, for the per-minute budget |
+| on_time_shot_ms | int | on-time so far of the current shot; the shot ends when it reaches the request's `duration_ms` (500 to `per_shot_ms`) |
+| cooldown_started_ms | device ms or none | when the last shot ended (any cause except one that enters SAFE_ERROR). The cooldown is running while `now - cooldown_started_ms < cooldown_ms`. Independent of the state (a DISARM cut starts it while the state is DISARMED). Cleared only by boot. |
 | last_seq, reply_cache | u16, 8 entries | duplicate and stale detection |
 | upload_session | UploadSession or none | see 2.3 |
 
@@ -133,7 +133,11 @@ State transitions (this feature):
 BOOT --> HOMING --(complete, simulated drift recorded)--> DISARMED
 DISARMED --(ARM: homed, key on, no fault)--> SCANNING
 any state except BOOT/HOMING/SAFE_ERROR --(DISARM)--> DISARMED      (DISARM is always accepted and replies OK; it cuts the effector and discards any upload; in BOOT, HOMING and SAFE_ERROR it changes nothing else: no state change, homing is not abandoned)
-SCANNING --(granted fire)--> DETER --(shot ends or any interlock lapses)--> SCANNING
+SCANNING --(granted fire)--> DETER
+DETER --(max duration reached, FIRE_STOP, or any interlock lapses except heartbeat loss and key off)--> COOLDOWN   (effector off, cooldown starts; earlier drafts returned to SCANNING)
+DETER --(DISARM)--> DISARMED   (effector cut, cooldown starts and keeps running)
+COOLDOWN --(cooldown_ms elapsed on the device clock)--> SCANNING
+any state --(FIRE_STOP)--> unchanged   (only a running shot is ended: DETER --> COOLDOWN; otherwise reply OK and nothing changes)
 any state except SAFE_ERROR --(key input on -> off)--> SAFE_ERROR   (effector cut, upload discarded, armed=false, fault KEY_OFF, interlock event)
 any state except BOOT/HOMING/SAFE_ERROR --(heartbeat lost > watchdog)--> SAFE_ERROR   (motion stopped, effector off, upload discarded, fault HEARTBEAT_LOST)
 SAFE_ERROR --(every latched fault's clearing condition true: heartbeat accepted for HEARTBEAT_LOST, key input on for KEY_OFF)--> DISARMED   (never re-arms; no clear command)
@@ -183,7 +187,7 @@ Behaviour of the derived value (the same rules as protocol.md section 5.5):
 
 ### 2.4 Fire attempt (in memory, for the reply and the events)
 
-Fields in the request: `issued_at_ms`, `ttl_ms`, `intended_pan_cdeg`, `intended_tilt_cdeg`, `duration_ms`. Result: `GRANTED` (shot started) or `DENIED` with one reason from the priority ladder (research R7). The reply carries the reason's permanent code, not its priority position (protocol.md section 6). The decision inputs are the device's own state and angles.
+Fields in the request: `issued_at_ms`, `ttl_ms`, `intended_pan_cdeg`, `intended_tilt_cdeg`, `duration_ms` (required; the maximum on-time, 500 to `per_shot_ms`). Result: `GRANTED` (shot started) or `DENIED` with one reason from the priority ladder (research R7). The reply carries the reason's permanent code, not its priority position (protocol.md section 6). The decision inputs are the device's own state and angles.
 
 ---
 
@@ -193,7 +197,7 @@ Authoritative layouts, byte by byte, are in [contracts/protocol.md](contracts/pr
 
 - **Command message**: `type`, `seq`, payload, `crc16`.
 - **Reply**: the request type with the high bit set (`type | 0x80`), the request's `seq`, a result (`OK`, `REJECTED`, `GRANTED`, `DENIED`), a code, and optional data.
-- **Device events (unsolicited)**: `STATUS` (state or angle change), `REJECT_NOTICE` (a frame was discarded and why), `EFFECTOR_EVENT` (on, off, cut with cause).
+- **Device events (unsolicited)**: `STATUS` (state or angle change), `REJECT_NOTICE` (a frame was discarded and why), `EFFECTOR_EVENT` (on, normal end, cut with cause, stopped by host).
 - **Heartbeat**: `person_clear`, `laptop_ts_ms`; reply carries `device_ms`.
 
 ---

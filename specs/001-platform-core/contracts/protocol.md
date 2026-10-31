@@ -73,13 +73,15 @@ on the wire = COBS( raw frame ) | 0x00
 | 0x13 | ZONE_DELETE | zone_id u8 | DISARMED or ZONE_SETUP |
 | 0x14 | ZONE_LIST | none | any state except BOOT |
 | 0x15 | ZONE_CLEAR | none | DISARMED or ZONE_SETUP |
-| 0x20 | FIRE_REQUEST | issued_at_ms u32, ttl_ms u16, intended_pan i16, intended_tilt i16, duration_ms u16 | any state except BOOT (denied with a reason if conditions fail) |
+| 0x20 | FIRE_REQUEST | issued_at_ms u32, ttl_ms u16, intended_pan i16, intended_tilt i16, duration_ms u16 (required) | any state except BOOT (denied with a reason if conditions fail) |
+| 0x21 | FIRE_STOP | none | always accepted (reply OK in every state), no arbitration. It can only switch the effector off, never on (section 5.4) |
 | 0x30 | STATUS_REQUEST | none | any state |
 
 Notes:
 - `person_clear`: 1 = no person detected, 0 = person present.
 - `issued_at_ms` is in the **device time base** (research R6). `ttl_ms` is 1 to 5000.
-- `duration_ms`: 0 means "hold until the per-shot limit"; otherwise 1 to 65535. Values above the per-shot limit are denied `ON_TIME_LIMIT`.
+- `duration_ms` is **required** and is the **maximum** on-time of that shot, in ms. The operator chooses it on the dashboard from 500 to 5000 in steps of 500 ms. The 0.5 s step is a user-interface rule only: the device checks the range, 500 to `per_shot_ms`, and does not check the step (750 is accepted). Below 500 (including 0) is `FIELD_RANGE` (a reject at step 7, before any arbitration, in every state). Above `per_shot_ms` is denied `ON_TIME_LIMIT` (priority 13). There is no value that means "hold". The shot ends at `duration_ms`, or earlier if the host sends `FIRE_STOP` (section 5.4). `per_shot_ms` MUST be configured at 500 or more.
+- `FIRE_STOP` has no payload (any other length is `BAD_LENGTH`). Its reply is `OK`, code 0, no data.
 - MOVE and JOG are applied instantly in the simulator (real motion speeds belong to feature 003). A target outside the soft limits is **refused**, never clamped.
 - The arm key is a physical input, not a message. The simulator takes it from `SimulatorControl.set_key`.
 
@@ -120,11 +122,11 @@ Data by message:
 |-----:|------|---------|
 | 0xC0 | STATUS | status block, sent when state, angles, key, armed, homed, store validity, effector or faults change, and at least once per second |
 | 0xC1 | REJECT_NOTICE | cause u8 (a reject code from steps 1 to 3), total_count u16 |
-| 0xC2 | EFFECTOR_EVENT | event u8 (1 on, 2 normal end, 3 cut), cause u8 (the permanent deny-reason code from section 6 for a cut) |
+| 0xC2 | EFFECTOR_EVENT | event u8 (1 on, 2 normal end, 3 cut, 4 stopped by host), cause u8 (the permanent deny-reason code from section 6 for a cut; 0 for events 1, 2 and 4). Code 13 (retired) is never sent |
 
 ### 4.3 State codes (u8)
 
-0 BOOT, 1 HOMING, 2 DISARMED, 3 SCANNING, 4 CANDIDATE, 5 SLEW, 6 CONFIRM, 7 TRACK, 8 DETER, 9 COOLDOWN, 10 ZONE_SETUP, 11 SAFE_ERROR.
+0 BOOT, 1 HOMING, 2 DISARMED, 3 SCANNING, 4 CANDIDATE, 5 SLEW, 6 CONFIRM, 7 TRACK, 8 DETER, 9 COOLDOWN, 10 ZONE_SETUP, 11 SAFE_ERROR. The code values are unchanged. In this feature the device enters COOLDOWN after every shot (section 5.4); CANDIDATE, SLEW, CONFIRM and TRACK are still not entered.
 
 ### 4.4 Fault bits (u16)
 
@@ -133,10 +135,10 @@ bit 0 HEARTBEAT_LOST, bit 1 unused (was ZONE_STORE_INVALID; zone-store validity 
 ## 5. Behaviour rules
 
 ### 5.1 Boot and homing
-BOOT, then HOMING for `homing_duration_ms` (simulated), then DISARMED with `armed = false`. During BOOT and HOMING, MOVE, JOG, ARM and FIRE_REQUEST are refused (`BUSY_HOMING` / `NOT_HOMED`) and no angle changes. The simulated homing records a drift value in the event stream (metric `homing_drift_simulated`).
+BOOT, then HOMING for `homing_duration_ms` (simulated), then DISARMED with `armed = false`. During BOOT and HOMING, MOVE, JOG, ARM and FIRE_REQUEST are refused (`BUSY_HOMING` / `NOT_HOMED`) and no angle changes. `FIRE_STOP` is accepted (reply OK) and changes nothing. The simulated homing records a drift value in the event stream (metric `homing_drift_simulated`).
 
 ### 5.2 Arm and disarm
-ARM needs homed, key on and no fault. The checks run in this order and the first failure is returned: `BUSY_HOMING` (state is HOMING), `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE` (for example in ZONE_SETUP). DISARM is always accepted and replies OK in every state, and it cuts the effector and discards any partial zone upload wherever those exist. In **BOOT, HOMING and SAFE_ERROR** it changes nothing else: the device does not leave the state, homing is not abandoned and keeps running to completion (so `homed` still ends true), and no fault is cleared or latched; the device leaves SAFE_ERROR only by the rule in section 5.6. In **every other state** (DISARMED, SCANNING, DETER, ZONE_SETUP) it moves the device to DISARMED with `armed = false`; in DISARMED it is a no-op.
+ARM needs homed, key on and no fault. The checks run in this order and the first failure is returned: `BUSY_HOMING` (state is HOMING), `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE` (for example in ZONE_SETUP). DISARM is always accepted and replies OK in every state, and it cuts the effector and discards any partial zone upload wherever those exist. In **BOOT, HOMING and SAFE_ERROR** it changes nothing else: the device does not leave the state, homing is not abandoned and keeps running to completion (so `homed` still ends true), and no fault is cleared or latched; the device leaves SAFE_ERROR only by the rule in section 5.6. In **every other state** (DISARMED, SCANNING, DETER, COOLDOWN, ZONE_SETUP) it moves the device to DISARMED with `armed = false`; in DISARMED it is a no-op. If `DISARM` cuts a running effector, that cut also starts the cooldown (section 5.4); the cooldown timer keeps running although the state is DISARMED.
 
 **Key off (one rule for every state)**: when the key input changes from on to off, in any state except SAFE_ERROR (already there), the device MUST in this order: cut the effector if it is on, discard any partial zone upload, set armed to false, latch fault `KEY_OFF`, count an interlock event (cause KEY_OFF), and enter SAFE_ERROR. This applies equally in DISARMED, HOMING, SCANNING, DETER and ZONE_SETUP, as `docs/system-scope.md` requires ("Any state -> SAFE/ERROR on ... key off"). The trigger is the **change** from on to off, not the level: a device that boots with the key already off is not in a fault, it simply cannot arm (`KEY_OFF`). Leaving SAFE_ERROR is in section 5.6. A key-off event during BOOT is not possible: the key level is sampled when BOOT ends and the rule above applies from HOMING onward.
 
@@ -169,12 +171,56 @@ Outcome for a fire request: person present gives `PERSON_NOT_CLEAR` (rung 7); ot
 
 **Defaults and which failure is seen first.** `person_clear_holdoff_ms` = 1000 and `watchdog_ms` = 1000 are equal. Both age from the same moment, the receive time of the last accepted heartbeat, because every accepted heartbeat carries a status. With equal values, when the laptop goes silent the status goes stale and the heartbeat is lost at the same instant, so a fire request is denied `HEARTBEAT_LOST` (rung 1) before `PERSON_NOT_CLEAR` (rung 7) is evaluated, and the watchdog enters SAFE_ERROR. A `PERSON_NOT_CLEAR` denial caused by a **stale status** is therefore reachable only when the hold-off is set below the watchdog (a silence longer than the hold-off but not longer than the watchdog). Both defaults are **provisional** and are to be re-tuned in feature 004 with measured Wi-Fi jitter.
 
-While the effector is on, a person present condition cuts it at once (cause `PERSON_NOT_CLEAR`). The device stays armed and keeps its state, except that the shot ends (DETER to SCANNING). When the delay ends, **nothing happens by itself**: the device never fires on its own, never resumes a shot that was cut, and the effector stays off until the host sends a **new** `FIRE_REQUEST`, which must pass every check.
+While the effector is on, a person present condition cuts it at once (cause `PERSON_NOT_CLEAR`). The device stays armed and keeps its state, except that the shot ends: DETER goes to COOLDOWN, and the cooldown starts (section 5.4). Earlier drafts returned DETER to SCANNING; that is replaced. When the delay ends, **nothing happens by itself**: the device never fires on its own, never resumes a shot that was cut, and the effector stays off until the host sends a **new** `FIRE_REQUEST`, which must pass every check.
 
-### 5.4 Fire request
-Granting requires every condition in section 6. On grant: state DETER, effector on, `EFFECTOR_EVENT on`. The shot runs for `duration_ms` (or `per_shot_ms` if 0) and then ends normally (`EFFECTOR_EVENT normal end`, state SCANNING). While on, the device re-checks priorities 1 to 12 of section 6, except priority 9 (`REQUEST_EXPIRED`), on every tick (at most 10 ms apart) and on every message. If one fails it cuts at once (`EFFECTOR_EVENT cut`, cause = that reason) and counts an interlock event. `REQUEST_EXPIRED` is a precondition checked once when the request is admitted; it is a property of the request only and is never re-checked, so a granted shot is not cut when its `ttl_ms` passes. What follows depends only on the cause: `HEARTBEAT_LOST` and `KEY_OFF` enter SAFE_ERROR (sections 5.2, 5.3 and 5.6); a `DISARM` leaves the device DISARMED; every other cause (person present, zone store invalid, elevation limit, zone margin) ends the shot, so DETER returns to SCANNING and the device stays armed. **No cause other than heartbeat loss and key off latches a fault, and none of the others changes any state other than ending the shot.** A `duration_ms` of 0 runs until `per_shot_ms` and ends with a cut caused by `ON_TIME_LIMIT`.
+### 5.4 Fire request, shot end and cooldown
+Granting requires every condition in section 6. On grant: state DETER, effector on, `EFFECTOR_EVENT on`. The shot runs for at most `duration_ms`. It ends normally when that time is reached (`EFFECTOR_EVENT normal end`, state COOLDOWN), or earlier on `FIRE_STOP` or a cut. While on, the device re-checks priorities 1 to 12 of section 6, except priority 9 (`REQUEST_EXPIRED`), on every tick (at most 10 ms apart) and on every message. If one fails it cuts at once (`EFFECTOR_EVENT cut`, cause = that reason) and counts an interlock event. `REQUEST_EXPIRED` is a precondition checked once when the request is admitted; it is a property of the request only and is never re-checked, so a granted shot is not cut when its `ttl_ms` passes. What follows depends only on the cause: `HEARTBEAT_LOST` and `KEY_OFF` enter SAFE_ERROR (sections 5.2, 5.3 and 5.6) and do not start a cooldown; a `DISARM` leaves the device DISARMED and starts the cooldown; every other cause (person present, fault active, zone store invalid, elevation limit, zone margin) ends the shot, so DETER goes to COOLDOWN (not SCANNING) and the device stays armed. **No cause other than heartbeat loss and key off latches a fault, and none of the others changes any state other than ending the shot.**
 
 The device judges by its **own measured angles**. If the request's intended direction differs from them by more than 100 centidegrees, the device reports it in a log event, but this never changes the decision.
+
+#### Shot end and cooldown
+
+A **shot** is one period with the effector on, from a grant to its end. A **cooldown** is a period after a shot in which the effector is off and fire requests are denied `COOLDOWN_ACTIVE`. Every shot ends in exactly one of these ways:
+
+| Shot ends by | Event sent | New state | Cooldown starts |
+|--------------|-----------|-----------|-----------------|
+| Maximum duration reached (`duration_ms`) | EFFECTOR_EVENT normal end (2) | COOLDOWN | Yes |
+| `FIRE_STOP` | EFFECTOR_EVENT stopped by host (4) | COOLDOWN | Yes |
+| Cut: person present, fault active, zone store invalid, elevation limit, zone margin | EFFECTOR_EVENT cut (3) with that cause | COOLDOWN | Yes |
+| Cut: `DISARM` (cause NOT_ARMED) | EFFECTOR_EVENT cut (3) | DISARMED | Yes (the timer runs although the state is DISARMED) |
+| Cut: heartbeat lost or key off | EFFECTOR_EVENT cut (3) | SAFE_ERROR | No |
+
+Rules:
+1. **Start.** When a shot ends in a way marked "Yes", the device stores `cooldown_started_ms`, the reading of its own clock at that moment. The length is `cooldown_ms` (default 5000, provisional, configurable, section 8).
+2. **Running.** The cooldown is running while `now - cooldown_started_ms < cooldown_ms` (wrap-safe). Exact boundary: at `cooldown_ms - 1` ms after the shot ended it is running and a request is denied; at exactly `cooldown_ms` it is no longer running and a request may be granted. This test uses only the device's own clock and does not depend on the state, so a running cooldown survives `DISARM`, `ARM` and recovery from SAFE_ERROR. Only boot clears it. A shot that ends in SAFE_ERROR does not start one.
+3. **State.** The shot's end moves DETER to COOLDOWN. COOLDOWN moves to SCANNING on the first tick at or after the time the cooldown stops running, measured on the device's own clock. The device does this before arbitration (like the SAFE_ERROR recovery in section 6), so a request arriving at exactly `cooldown_ms` finds the state already SCANNING. If the device is not in COOLDOWN (for example DISARMED), the timer still runs and no state changes when it ends.
+4. **Effector.** The effector is off throughout COOLDOWN. A fire request while the cooldown is running is denied `COOLDOWN_ACTIVE` (code 15), which is last in the priority order: any other failing condition is reported instead.
+5. **Other events in COOLDOWN** behave exactly as in other states: `DISARM` moves to DISARMED, key off and heartbeat loss move to SAFE_ERROR, `ARM` is an idempotent OK (the device is already armed), `MOVE`, `JOG`, `STATUS_REQUEST`, `ZONE_LIST` work, `HOME`, `ZONE_BEGIN`, `ZONE_DELETE` and `ZONE_CLEAR` are refused `WRONG_STATE`.
+6. **Separate from the person re-engage delay** (section 5.3). Either one can deny a request; the priority order decides which reason is reported (`PERSON_CLEAR_DELAY` is priority 8, `COOLDOWN_ACTIVE` is priority 14). The two timers start at different moments and neither affects the other.
+7. **Nothing else starts or restarts it.** A denied request, a `FIRE_STOP` when no shot is running, a heartbeat or a state change by itself do not start, restart or shorten a cooldown. `cooldown_ms` of 0 means no cooldown: COOLDOWN is left on the same tick and `COOLDOWN_ACTIVE` is never returned (whether production may use 0 is open question 5).
+
+#### FIRE_STOP
+
+1. `FIRE_STOP` is accepted in **every state**. It passes steps 1 to 7 of section 2 like any message (framing, CRC, sequence, type, length, ranges); step 8 does not apply to it, and **no arbitration runs**: none of the 14 priorities is evaluated.
+2. **If the effector is on**: it is switched off at once, `EFFECTOR_EVENT stopped by host` (event 4, cause 0) is sent, the cooldown starts and DETER goes to COOLDOWN. The reply is OK. The device stays armed, no fault is latched, and it is not counted as an interlock event (no safety condition lapsed; the host chose to stop).
+3. **If no shot is running**: the reply is OK and nothing changes: no state change, no event, no cooldown, no timer.
+4. `FIRE_STOP` never turns anything on, never starts a shot, never extends a shot, and never shortens or restarts a cooldown. Its only possible effect is to end a running shot earlier.
+5. A duplicate (same sequence number) gets the cached reply and causes no second action (section 3). A `FIRE_STOP` that arrives after its shot already ended is case 3. One that arrives during a later shot ends that shot, which is the safe direction.
+6. It does not refresh the heartbeat timer, the person timers or the zone upload idle timer (section 5.5).
+
+Total table of `FIRE_STOP` by state (every state is listed):
+
+| State | Effect of `FIRE_STOP` | State afterwards |
+|-------|------------------------|------------------|
+| BOOT | OK; nothing to stop | BOOT |
+| HOMING | OK; nothing to stop; homing continues | HOMING |
+| DISARMED | OK; nothing to stop | DISARMED |
+| SCANNING | OK; nothing to stop | SCANNING |
+| DETER | Effector off; `EFFECTOR_EVENT stopped by host`; cooldown starts; reply OK | COOLDOWN |
+| COOLDOWN | OK; effector already off; cooldown neither restarted nor shortened | COOLDOWN |
+| ZONE_SETUP | OK; the effector cannot be on here; the upload is untouched | ZONE_SETUP |
+| SAFE_ERROR | OK; faults and recovery untouched | SAFE_ERROR |
+| CANDIDATE, SLEW, CONFIRM, TRACK (not entered in this feature) | If the effector is on: as DETER. Otherwise OK and nothing changes | COOLDOWN if it was on, otherwise unchanged |
 
 ### 5.5 Zones
 - Upload: `ZONE_BEGIN` (device enters ZONE_SETUP and discards any earlier partial upload), then `ZONE_POINT` for index 0 to count-1 in order, then `ZONE_COMMIT`.
@@ -221,7 +267,7 @@ ZONE_SETUP has exactly one way in and several ways out. Events are handled one a
 | 7 | `ZONE_BEGIN` accepted while in ZONE_SETUP | same conditions as IN, except the state is ZONE_SETUP | the old one is discarded, a fresh one starts | unchanged | off | ZONE_SETUP (stays) |
 | 8 | `ZONE_BEGIN` rejected | e.g. fewer than 3 points, too many points, store full, wrong state | no change to any upload | unchanged | no change | **no change**: not entered if not already in ZONE_SETUP; stays in ZONE_SETUP if it was there |
 
-Events that do **not** leave ZONE_SETUP (the total list, so nothing is undefined): `ZONE_POINT` accepted or rejected (`ZONE_BAD_INDEX` keeps the upload), `ZONE_DELETE`, `ZONE_CLEAR`, `ZONE_LIST`, `MOVE`, `JOG`, `HEARTBEAT` (accepted, stale or duplicate), `STATUS_REQUEST`. `ARM`, `HOME` are refused `WRONG_STATE`, and `FIRE_REQUEST` is denied `ZONE_SETUP`; none of these changes the state or the upload. Corrupted frames and stale or duplicate messages are rejected or replayed before any state logic runs (section 2 and 3).
+Events that do **not** leave ZONE_SETUP (the total list, so nothing is undefined): `ZONE_POINT` accepted or rejected (`ZONE_BAD_INDEX` keeps the upload), `ZONE_DELETE`, `ZONE_CLEAR`, `ZONE_LIST`, `MOVE`, `JOG`, `HEARTBEAT` (accepted, stale or duplicate), `STATUS_REQUEST`, `FIRE_STOP` (reply OK, upload untouched). `ARM`, `HOME` are refused `WRONG_STATE`, and `FIRE_REQUEST` is denied `ZONE_SETUP`; none of these changes the state or the upload. Corrupted frames and stale or duplicate messages are rejected or replayed before any state logic runs (section 2 and 3).
 
 ### 5.6 SAFE_ERROR: entering and leaving
 
@@ -237,7 +283,7 @@ Events that do **not** leave ZONE_SETUP (the total list, so nothing is undefined
 
 Plain answers:
 - The key **must be back on** to leave a key-off SAFE_ERROR. A returning heartbeat alone does not clear it, and a key switched on alone does not clear a heartbeat loss.
-- **No explicit fault-clear command is needed and none exists.** `DISARM` is accepted in SAFE_ERROR but does not leave it.
+- **No explicit fault-clear command is needed and none exists.** `DISARM` is accepted in SAFE_ERROR but does not leave it. `FIRE_STOP` is also accepted in SAFE_ERROR (reply OK) and changes nothing.
 - The device **never re-arms by itself**. It arrives in DISARMED with armed false, and a deliberate `ARM` is needed (and needs the key on, the device homed, and no fault).
 - If the key went off during HOMING, homing was abandoned: the device recovers to DISARMED with homed false and the operator must send `HOME` (allowed in DISARMED).
 
@@ -249,38 +295,40 @@ Two different numbers describe each reason, and they are separate data:
 - **Priority** (also called the rung): the position in the order in which conditions are evaluated. It is a property of the arbitration logic only and appears nowhere on the wire. It may change in a future version if conditions are added.
 - **Code**: the permanent number on the wire. It is the `code` byte of a DENIED reply and the `cause` byte of an `EFFECTOR_EVENT` cut. It never changes (section 6.1).
 
-**Every denial is a normal reply**: one reason, no state change, no latched fault. State changes in this feature come only from their own rules: `DISARM`, key off, heartbeat loss, the zone-upload exits, homing and a granted shot.
+**Every denial is a normal reply**: one reason, no state change, no latched fault. State changes in this feature come only from their own rules: `DISARM`, key off, heartbeat loss, the zone-upload exits, homing, a granted shot, a shot ending and the cooldown running out (`FIRE_STOP` changes the state only by ending a running shot).
 
-Before the rungs are evaluated, the device evaluates the SAFE_ERROR recovery rule (section 5.6), so a key-off fault whose key is back on is already cleared and cannot be reported as `FAULT_ACTIVE`.
+Before the rungs are evaluated, the device evaluates the SAFE_ERROR recovery rule (section 5.6), so a key-off fault whose key is back on is already cleared and cannot be reported as `FAULT_ACTIVE`, and the cooldown expiry (section 5.4), so a request at exactly `cooldown_ms` finds the cooldown over.
 
-| Priority | Reason | Code | The one condition that fails | Also cuts the effector if it is on? |
-|---------:|--------|-----:|------------------------------|-------------------------------------|
-| 1 | HEARTBEAT_LOST | 1 | The heartbeat is not alive: none accepted yet, or `now - last_rx > watchdog_ms` | Yes, and SAFE_ERROR |
-| 2 | FAULT_ACTIVE | 2 | `fault_mask` has a bit other than HEARTBEAT_LOST and KEY_OFF (in this feature only reserved bits or test injection; the mask is returned in data) | Yes (a fault stops the effector) |
-| 3 | ZONE_SETUP | 3 | State is ZONE_SETUP | Not applicable: the effector cannot be on in ZONE_SETUP |
-| 4 | NOT_HOMED | 4 | The homed flag is false (includes BOOT and HOMING) | Not applicable: the effector cannot be on when not homed |
-| 5 | KEY_OFF | 5 | The key input is off, read live at request time | Yes, and SAFE_ERROR |
-| 6 | NOT_ARMED | 6 | The armed flag is false | Yes: the cause is a `DISARM`, which cuts the effector and leaves the device DISARMED |
-| 7 | PERSON_NOT_CLEAR | 7 | Person present: reported, or no accepted status yet, or status stale (section 5.3) | Yes; the device keeps its state |
-| 8 | PERSON_CLEAR_DELAY | 14 | Person no longer present, but the clear period is shorter than `person_reengage_delay_ms` | Not applicable: the effector cannot be on before the delay has elapsed, and any break in clear goes through priority 7 |
-| 9 | REQUEST_EXPIRED | 8 | `now > issued_at_ms + ttl_ms` | No: a property of the request only |
-| 10 | ZONE_STORE_INVALID | 9 | The derived zone-store validity is false (section 5.5) | Yes; the device keeps its state |
-| 11 | ELEVATION_LIMIT | 10 | Current tilt outside `[elevation_min_cdeg, elevation_max_cdeg]` (default 0 to 8000) | Yes; the device keeps its state |
-| 12 | IN_ZONE_MARGIN | 11 | Current direction inside a zone or within its margin of an edge | Yes; the device keeps its state |
-| 13 | ON_TIME_LIMIT | 12 | `duration_ms` greater than `per_shot_ms` (default 2000) | Yes, as the shot timer: a `duration_ms` of 0 ends at `per_shot_ms` with this cause |
-| 14 | RATE_LIMIT | 13 | On-time in the last 60 s plus this shot would exceed `per_minute_ms` (default 10000) | No: checked and reserved at grant time, so it cannot lapse mid-shot |
+| Priority | Reason | Code | Status | The one condition that fails | Also cuts the effector if it is on? |
+|---------:|--------|-----:|--------|------------------------------|-------------------------------------|
+| 1 | HEARTBEAT_LOST | 1 | active | The heartbeat is not alive: none accepted yet, or `now - last_rx > watchdog_ms` | Yes, and SAFE_ERROR |
+| 2 | FAULT_ACTIVE | 2 | active | `fault_mask` has a bit other than HEARTBEAT_LOST and KEY_OFF (in this feature only reserved bits or test injection; the mask is returned in data) | Yes (a fault stops the effector) |
+| 3 | ZONE_SETUP | 3 | active | State is ZONE_SETUP | Not applicable: the effector cannot be on in ZONE_SETUP |
+| 4 | NOT_HOMED | 4 | active | The homed flag is false (includes BOOT and HOMING) | Not applicable: the effector cannot be on when not homed |
+| 5 | KEY_OFF | 5 | active | The key input is off, read live at request time | Yes, and SAFE_ERROR |
+| 6 | NOT_ARMED | 6 | active | The armed flag is false | Yes: the cause is a `DISARM`, which cuts the effector and leaves the device DISARMED |
+| 7 | PERSON_NOT_CLEAR | 7 | active | Person present: reported, or no accepted status yet, or status stale (section 5.3) | Yes; the device keeps its state (the shot ends, section 5.4) |
+| 8 | PERSON_CLEAR_DELAY | 14 | active | Person no longer present, but the clear period is shorter than `person_reengage_delay_ms` | Not applicable: the effector cannot be on before the delay has elapsed, and any break in clear goes through priority 7 |
+| 9 | REQUEST_EXPIRED | 8 | active | `now > issued_at_ms + ttl_ms` | No: a property of the request only |
+| 10 | ZONE_STORE_INVALID | 9 | active | The derived zone-store validity is false (section 5.5) | Yes; the device keeps its state |
+| 11 | ELEVATION_LIMIT | 10 | active | Current tilt outside `[elevation_min_cdeg, elevation_max_cdeg]` (default 0 to 8000) | Yes; the device keeps its state |
+| 12 | IN_ZONE_MARGIN | 11 | active | Current direction inside a zone or within its margin of an edge | Yes; the device keeps its state |
+| 13 | ON_TIME_LIMIT | 12 | active | `duration_ms` greater than `per_shot_ms` (default 5000) | No: a property of the request only, checked once at admission. The shot timer ends the shot at `duration_ms`, which is a normal end, not a cut |
+| 14 | COOLDOWN_ACTIVE | 15 | active | A cooldown is running: `now - cooldown_started_ms < cooldown_ms` (section 5.4) | Not applicable: a cooldown starts only when a shot ends, so the effector cannot be on while it runs |
+| none | RATE_LIMIT | 13 | **retired** | Retired. It was "on-time in the last 60 s plus this shot would exceed a per-minute budget". It is never evaluated and never returned | Not applicable. Code 13 is never reused |
 
-Priorities 1 to 12 except priority 9 are the interlocks re-checked on every tick and message while the effector is on; priority 9 (`REQUEST_EXPIRED`) is checked once at admission and never again; priority 13 is the shot timer. "Keeps its state" means that apart from the shot ending (DETER to SCANNING) nothing changes: the device stays armed and no fault is latched.
+Priorities 1 to 12 except priority 9 are the interlocks re-checked on every tick and message while the effector is on. Priorities 9 (`REQUEST_EXPIRED`) and 13 (`ON_TIME_LIMIT`) are properties of the request, checked once at admission and never again; the shot timer ends the shot at `duration_ms` as a normal end, not a cut. Priority 14 (`COOLDOWN_ACTIVE`) cannot lapse during a shot, because a cooldown starts only when a shot ends. "Keeps its state" means that apart from the shot ending (DETER to COOLDOWN) nothing changes: the device stays armed and no fault is latched.
 
 ### 6.1 Reason codes are permanent
 
 1. A reason's code is fixed forever. A code is **never reused and never reassigned**, even if its reason is retired; a retired code stays retired.
-2. A new reason always receives the **next unused number** (the next one after this table is 15).
+2. A new reason always receives the **next unused number** (the next one after this table is 16; a retired code counts as used).
 3. **Adding, removing or reordering priorities never changes an existing code.** Priority and code are separate columns for this reason.
 4. **Changing the meaning of a code requires a protocol version change** (a new MAJOR version).
-5. Codes 1 to 13 keep the values these reasons had before `PERSON_CLEAR_DELAY` was added; `PERSON_CLEAR_DELAY` is 14.
-6. The table is mirrored in the machine-readable file `protocol/reason-codes.json`, which the vector runner uses to turn a reason name into a number. A test checks that the names and codes are unique, that the file matches this table, and that no released pair has changed (see [scenario-vectors.md](scenario-vectors.md) section 8).
-7. Deny-reason codes (this section) and reject codes (section 7) are two separate numbering spaces. The same permanence rule applies to every identifier on the wire (message types, state codes, fault bits and reject codes); only the reason-code table has the lock test in this feature.
+5. Codes 1 to 12 keep the values these reasons had before `PERSON_CLEAR_DELAY` was added; `PERSON_CLEAR_DELAY` is 14. Code 13 (`RATE_LIMIT`) is **retired** and `COOLDOWN_ACTIVE` is 15.
+6. The table is mirrored in the machine-readable file `protocol/reason-codes.json`, which the vector runner uses to turn a reason name into a number. Every entry has a status, `active` or `retired`; the retired entry stays in the file. A test checks that the names and codes are unique, that the file matches this table (status included), and that no released pair has changed (see [scenario-vectors.md](scenario-vectors.md) section 8).
+7. **Retired** means: the reason is no longer evaluated and no device ever sends its code, but the name-to-code pair stays in the table, in `reason-codes.json` and in the locked snapshot, marked retired, for as long as the protocol exists. A host that receives a retired code treats it as a protocol error. `RATE_LIMIT` (13) was retired in the draft, before any release of the protocol, so the protocol version is still 0.1; a vector and the lock test check that code 13 is never returned.
+8. Deny-reason codes (this section) and reject codes (section 7) are two separate numbering spaces. The same permanence rule applies to every identifier on the wire (message types, state codes, fault bits and reject codes); only the reason-code table has the lock test in this feature.
 
 ## 7. Reject codes (result REJECTED, `code` byte)
 
@@ -323,9 +371,10 @@ All are named configuration values on the device. Vectors set them explicitly.
 | person_clear_holdoff_ms | 1000 (provisional) | Status hold-off: maximum age of the latest accepted person-clear status (section 5.3). Equal to the watchdog by default, see the note in 5.3. Re-tune in feature 004 |
 | person_reengage_delay_ms | 5000 (provisional) | Re-engage delay: how long person-clear must have been reported continuously before firing is allowed again (section 5.3). 0 disables it |
 | fire_ttl_ms | 500 | Default TTL a host puts on a fire request |
+| min `duration_ms` | 500 | Fixed protocol constant, not configurable: the shortest accepted shot (section 4.1) |
 | command_ttl_ms | 500 | How long a host waits for a reply before treating the command as timed out (host rule; the engagement uses it for `esp32_ack`) |
-| per_shot_ms | 2000 | Maximum single shot |
-| per_minute_ms | 10000 | Maximum on-time in any 60 s |
+| per_shot_ms | 5000 (provisional) | Largest `duration_ms` a request may ask for; above it the request is denied `ON_TIME_LIMIT`. MUST be at least 500. The hardware on-time cutoff MUST be set at or above this value (docs/system-scope.md) |
+| cooldown_ms | 5000 (provisional) | Cooldown after every shot that does not end in SAFE_ERROR (section 5.4). 0 disables it |
 | zone_upload_timeout_ms | 5000 | Idle time before a partial upload is discarded |
 | homing_duration_ms | 3000 | Simulated homing time |
 | aiming_error_cdeg | 20 | Simulated aiming error added to the margin |
@@ -341,3 +390,6 @@ Scenario vectors need starting conditions such as "armed, key off, store corrupt
 2. **Version on the wire.** This draft has no protocol version field in any message, so a device and a host cannot detect that they follow different versions. Whether to add one (for example in the status block or the heartbeat reply) is decided before the firmware is written (feature 003).
 3. **Key switch debouncing** and short-glitch handling on real hardware: feature 006 (section 5.2).
 4. **Hold-off and watchdog defaults**: feature 004 (section 5.3).
+5. **Cooldown of 0** disables the cooldown (section 5.4). Whether production configuration may use 0, or must enforce a minimum, is decided in feature 006. The default 5000 ms is provisional and is re-baselined with the effector in feature 006.
+
+**Future (not part of feature 001)**: manual mode is not added in this feature. When it is, a manual-mode fire goes through normal arbitration, including the person-clear rule (feature 006). Jogging is feature 003. Calibration 3 (telephoto-to-effector alignment) in feature 004 may need a minimal manual fire control earlier than feature 006.

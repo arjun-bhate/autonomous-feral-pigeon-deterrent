@@ -118,6 +118,7 @@ Each vector below needs `initial` conditions from section 2 and is deterministic
 | zone.setup.exit8.begin_rejected_inside_setup | 8 | Upload in progress, then a rejected BEGIN (store full variant or too few points) | state still ZONE_SETUP; the earlier upload continues and its commit succeeds |
 | zone.setup.nonexit.other_messages | not-exit list | In ZONE_SETUP: `ARM`, `HOME`, `FIRE_REQUEST`, `ZONE_LIST`, `MOVE`, `ZONE_POINT` with a bad index | `WRONG_STATE` for ARM and HOME, DENIED `ZONE_SETUP` for fire, bad index `ZONE_BAD_INDEX`; state and upload unchanged |
 | zone.setup.begin_rejected_when_armed | IN guard | `ZONE_BEGIN` while SCANNING | `WRONG_STATE`; state unchanged |
+| zone.setup.idle_timer_only_upload_messages | `timing:zone_upload_timeout_ms` | `zone_upload_timeout_ms` 5000; heartbeats every 200 ms throughout. `ZONE_BEGIN` at t = 0, `ZONE_POINT` index 0 at t = 3000, then at t = 4000 to 7000 a `STATUS_REQUEST`, `ZONE_LIST`, `MOVE` and a stale-seq message every 1000 ms | Still ZONE_SETUP at t = 7900 (only the point at 3000 reset the timer); state DISARMED at t = 8100; next `ZONE_POINT` gets `ZONE_NO_UPLOAD` |
 
 ### 6.2 Key off and SAFE_ERROR recovery (files `fire_arbitration.json` and `timing.json`)
 
@@ -135,6 +136,8 @@ Each vector below needs `initial` conditions from section 2 and is deterministic
 | key.recover.both_faults | one recovery rule | Key off and heartbeat lost together; key back on first, heartbeat later | stays SAFE_ERROR until both conditions are true, then DISARMED |
 | key.recover.key_on_but_fault_unclear | priority note | Key back on while another fault bit (injected, non-clearing) is set | stays SAFE_ERROR; `FIRE_REQUEST` denied `FAULT_ACTIVE` |
 | key.disarm_in_safe_error | DISARM semantics | In SAFE_ERROR (key off): `DISARM` | reply OK; state stays SAFE_ERROR |
+| disarm.safe_error_heartbeat_lost_stays | `disarm:SAFE_ERROR_NO_CHANGE` | SAFE_ERROR entered by heartbeat loss (key on); `DISARM` with no heartbeat since | reply OK; state stays SAFE_ERROR; fault_mask still has HEARTBEAT_LOST; armed false |
+| disarm.during_homing_continues | `disarm:HOMING_NO_CHANGE` | `homing_duration_ms` 3000; boot at t = 0; heartbeats every 200 ms; `DISARM` at t = 1000; `advance` to 2900 and 3100 | reply OK at t = 1000; state HOMING at t = 1000 and t = 2900 (homing not abandoned); state DISARMED at t = 3100 with `homed` true, armed false, fault_mask 0; exactly one homing-drift event |
 
 Tags to use in `covers`: `setup:IN`, `setup:EXIT_1` .. `setup:EXIT_8`, `setup:NONEXIT`, `key:ANY_STATE`, `key:EDGE_NOT_LEVEL`, `key:RECOVERY`, `key:NEVER_REARMS`, `key:FAULT_PRIORITY`.
 
@@ -173,6 +176,7 @@ Timing note for authors: with the default values the status hold-off and the hea
 | fire.deny.in_zone_margin | `deny:IN_ZONE_MARGIN`, `denial:NO_FAULT` | Direction inside a stored zone; request | DENIED `IN_ZONE_MARGIN` (rung 12); no state change; `fault_mask` 0. Then `MOVE` outside the margin and a new request is GRANTED, proving nothing was latched |
 | fire.deny.elevation_limit | `deny:ELEVATION_LIMIT`, `denial:NO_FAULT` | Config elevation max 4000, tilt 6000 | DENIED `ELEVATION_LIMIT` (rung 11); no state change; `fault_mask` 0 |
 | fire.cut.zone_margin_while_on | `interlock:IN_ZONE_MARGIN` | Shot running; `MOVE` into a zone margin | Cut cause `IN_ZONE_MARGIN` within 100 ms; effector off; state SCANNING, armed true; `fault_mask` 0 |
+| fire.ttl.not_rechecked_while_on | `interlock:NO_TTL_RECHECK` | `ttl_ms` 500, `duration_ms` 2000, `per_shot_ms` 2000; heartbeats clear every 200 ms; request issued at t = 0 and arriving at t = 0 is GRANTED; `advance` to t = 600, then to t = 1900, then to t = 2000 | At t = 600 and t = 1900: `effector_on` true, state DETER, no `EFFECTOR_EVENT cut`, zero interlock events. At t = 2000: `EFFECTOR_EVENT normal end`, state SCANNING. Nothing is cut with cause `REQUEST_EXPIRED` |
 | fire.cut.elevation_while_on | `interlock:ELEVATION_LIMIT` | Shot running; `MOVE` beyond the elevation limit but inside the soft limit | Cut cause `ELEVATION_LIMIT`; state SCANNING, armed true; `fault_mask` 0 |
 
 ### 7.4 Zone-store validity (derived)
@@ -195,7 +199,7 @@ Timing note for authors: with the default values the status hold-off and the hea
 | fault.reserved_bits_stay_clear | `fault:RESERVED_CLEAR` | One long run: boot, home, arm, a granted shot, a person cut, a zone denial, a corrupt store and `ZONE_CLEAR`, key off and back on, heartbeat loss and recovery | At every step `fault_mask` has neither bit 2 (`HOMING_FAILED`) nor bit 3 (`INTERNAL`) |
 | fire.deny.fault_active_reserved | `deny:FAULT_ACTIVE` | Injected `fault_mask` with bit 3 (`INTERNAL`) set (test-only, it cannot occur in this feature) | DENIED `FAULT_ACTIVE` (rung 2) with the mask in the data |
 
-`covers` tags added by this section (`store:UNREADABLE`, `store:READABLE_AGAIN` also): `person:NO_STATE_CHANGE`, `person:CUT`, `person:NO_RESUME`, `person:RESTART`, `person:BOUNDARY`, `priority:rung7_over_rung8`, `priority:rung8_over_rung9`, `denial:NO_FAULT`, `interlock:*`, `store:*`, `fault:RESERVED_CLEAR`, `key:LIVE_LEVEL`, and `deny:PERSON_CLEAR_DELAY`, which joins the denial coverage rule in section 1. The coverage test also requires a vector for `timing:person_reengage_delay_ms` and `timing:person_clear_holdoff_ms`.
+`covers` tags added by this section (`store:UNREADABLE`, `store:READABLE_AGAIN` also): `person:NO_STATE_CHANGE`, `person:CUT`, `person:NO_RESUME`, `person:RESTART`, `person:BOUNDARY`, `priority:rung7_over_rung8`, `priority:rung8_over_rung9`, `denial:NO_FAULT`, `disarm:HOMING_NO_CHANGE`, `disarm:SAFE_ERROR_NO_CHANGE`, `interlock:*` (including `interlock:NO_TTL_RECHECK`), `store:*`, `fault:RESERVED_CLEAR`, `key:LIVE_LEVEL`, and `deny:PERSON_CLEAR_DELAY`, which joins the denial coverage rule in section 1. The coverage test also requires a vector for `timing:person_reengage_delay_ms` and `timing:person_clear_holdoff_ms`, and `timing:zone_upload_timeout_ms`.
 
 ## 8. Reason-code table checks (permanent codes)
 

@@ -66,7 +66,7 @@ on the wire = COBS( raw frame ) | 0x00
 | 0x03 | JOG | dpan i16, dtilt i16 (relative) | same as MOVE |
 | 0x04 | HEARTBEAT | person_clear u8, laptop_ts_ms u32 | any state except BOOT |
 | 0x05 | ARM | none | homed, key on, no fault, state DISARMED (or already armed: idempotent OK) |
-| 0x06 | DISARM | none | always accepted. It is also the only operator "abort" for a zone upload (section 5.5). In SAFE_ERROR it replies OK but does not leave SAFE_ERROR (section 5.6) |
+| 0x06 | DISARM | none | always accepted (reply OK in every state). It cuts the effector and discards any partial zone upload wherever those exist. It is also the only operator "abort" for a zone upload (section 5.5). In BOOT, HOMING and SAFE_ERROR it changes nothing else: the state is unchanged and homing is not abandoned (section 5.2); in every other state it moves the device to DISARMED |
 | 0x10 | ZONE_BEGIN | zone_id u8, point_count u8 | homed, DISARMED or ZONE_SETUP |
 | 0x11 | ZONE_POINT | index u8, pan i16, tilt i16 | upload in progress |
 | 0x12 | ZONE_COMMIT | crc32 u32 | upload in progress |
@@ -106,7 +106,7 @@ Data by message:
 | HEARTBEAT | device_ms u32, state u8 |
 | ZONE_LIST | count u8, then per zone: zone_id u8, point_count u8, crc32 u32 (6 bytes each; the 59-byte payload limit means at most 9 zones per list, so the zone limit stays at 8 unless paging is added) |
 | STATUS_REQUEST | the status block below |
-| FIRE_REQUEST (GRANTED) | granted_on_ms u16 |
+| FIRE_REQUEST (GRANTED) | granted_on_ms u32 (device time base, the same clock as `device_ms`; 4 bytes, within the 57-byte data limit) |
 | FIRE_REQUEST (DENIED) | fault_mask u16 (non-zero detail when the reason is FAULT_ACTIVE) |
 | others | none |
 
@@ -136,7 +136,7 @@ bit 0 HEARTBEAT_LOST, bit 1 unused (was ZONE_STORE_INVALID; zone-store validity 
 BOOT, then HOMING for `homing_duration_ms` (simulated), then DISARMED with `armed = false`. During BOOT and HOMING, MOVE, JOG, ARM and FIRE_REQUEST are refused (`BUSY_HOMING` / `NOT_HOMED`) and no angle changes. The simulated homing records a drift value in the event stream (metric `homing_drift_simulated`).
 
 ### 5.2 Arm and disarm
-ARM needs homed, key on and no fault. The checks run in this order and the first failure is returned: `BUSY_HOMING` (state is HOMING), `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE` (for example in ZONE_SETUP). DISARM is always accepted, cuts the effector and discards any partial zone upload; from SCANNING, DETER and ZONE_SETUP it moves the device to DISARMED.
+ARM needs homed, key on and no fault. The checks run in this order and the first failure is returned: `BUSY_HOMING` (state is HOMING), `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE` (for example in ZONE_SETUP). DISARM is always accepted and replies OK in every state, and it cuts the effector and discards any partial zone upload wherever those exist. In **BOOT, HOMING and SAFE_ERROR** it changes nothing else: the device does not leave the state, homing is not abandoned and keeps running to completion (so `homed` still ends true), and no fault is cleared or latched; the device leaves SAFE_ERROR only by the rule in section 5.6. In **every other state** (DISARMED, SCANNING, DETER, ZONE_SETUP) it moves the device to DISARMED with `armed = false`; in DISARMED it is a no-op.
 
 **Key off (one rule for every state)**: when the key input changes from on to off, in any state except SAFE_ERROR (already there), the device MUST in this order: cut the effector if it is on, discard any partial zone upload, set armed to false, latch fault `KEY_OFF`, count an interlock event (cause KEY_OFF), and enter SAFE_ERROR. This applies equally in DISARMED, HOMING, SCANNING, DETER and ZONE_SETUP, as `docs/system-scope.md` requires ("Any state -> SAFE/ERROR on ... key off"). The trigger is the **change** from on to off, not the level: a device that boots with the key already off is not in a fault, it simply cannot arm (`KEY_OFF`). Leaving SAFE_ERROR is in section 5.6. A key-off event during BOOT is not possible: the key level is sampled when BOOT ends and the rule above applies from HOMING onward.
 
@@ -172,14 +172,14 @@ Outcome for a fire request: person present gives `PERSON_NOT_CLEAR` (rung 7); ot
 While the effector is on, a person present condition cuts it at once (cause `PERSON_NOT_CLEAR`). The device stays armed and keeps its state, except that the shot ends (DETER to SCANNING). When the delay ends, **nothing happens by itself**: the device never fires on its own, never resumes a shot that was cut, and the effector stays off until the host sends a **new** `FIRE_REQUEST`, which must pass every check.
 
 ### 5.4 Fire request
-Granting requires every condition in section 6. On grant: state DETER, effector on, `EFFECTOR_EVENT on`. The shot runs for `duration_ms` (or `per_shot_ms` if 0) and then ends normally (`EFFECTOR_EVENT normal end`, state SCANNING). While on, the device re-checks rungs 1 to 12 of section 6 on every tick (at most 10 ms apart) and on every message. If one fails it cuts at once (`EFFECTOR_EVENT cut`, cause = that reason) and counts an interlock event. What follows depends only on the cause: `HEARTBEAT_LOST` and `KEY_OFF` enter SAFE_ERROR (sections 5.2, 5.3 and 5.6); a `DISARM` leaves the device DISARMED; every other cause (person present, zone store invalid, elevation limit, zone margin) ends the shot, so DETER returns to SCANNING and the device stays armed. **No cause other than heartbeat loss and key off latches a fault, and none of the others changes any state other than ending the shot.** A `duration_ms` of 0 runs until `per_shot_ms` and ends with a cut caused by `ON_TIME_LIMIT`.
+Granting requires every condition in section 6. On grant: state DETER, effector on, `EFFECTOR_EVENT on`. The shot runs for `duration_ms` (or `per_shot_ms` if 0) and then ends normally (`EFFECTOR_EVENT normal end`, state SCANNING). While on, the device re-checks priorities 1 to 12 of section 6, except priority 9 (`REQUEST_EXPIRED`), on every tick (at most 10 ms apart) and on every message. If one fails it cuts at once (`EFFECTOR_EVENT cut`, cause = that reason) and counts an interlock event. `REQUEST_EXPIRED` is a precondition checked once when the request is admitted; it is a property of the request only and is never re-checked, so a granted shot is not cut when its `ttl_ms` passes. What follows depends only on the cause: `HEARTBEAT_LOST` and `KEY_OFF` enter SAFE_ERROR (sections 5.2, 5.3 and 5.6); a `DISARM` leaves the device DISARMED; every other cause (person present, zone store invalid, elevation limit, zone margin) ends the shot, so DETER returns to SCANNING and the device stays armed. **No cause other than heartbeat loss and key off latches a fault, and none of the others changes any state other than ending the shot.** A `duration_ms` of 0 runs until `per_shot_ms` and ends with a cut caused by `ON_TIME_LIMIT`.
 
 The device judges by its **own measured angles**. If the request's intended direction differs from them by more than 100 centidegrees, the device reports it in a log event, but this never changes the decision.
 
 ### 5.5 Zones
 - Upload: `ZONE_BEGIN` (device enters ZONE_SETUP and discards any earlier partial upload), then `ZONE_POINT` for index 0 to count-1 in order, then `ZONE_COMMIT`.
 - A point whose index is not the next expected one is `ZONE_BAD_INDEX`; the upload is kept (the host may resend the right point).
-- If no upload message arrives for `zone_upload_timeout_ms` (default 5000), the partial upload is discarded and the device returns to DISARMED. The next upload message gets `ZONE_NO_UPLOAD`.
+- If no upload message arrives for `zone_upload_timeout_ms` (default 5000), the partial upload is discarded and the device returns to DISARMED. The next upload message gets `ZONE_NO_UPLOAD`. **Only `ZONE_BEGIN`, `ZONE_POINT` and `ZONE_COMMIT` reset this idle timer.** Heartbeats and every other message (including `ZONE_LIST`, `ZONE_DELETE`, `ZONE_CLEAR`, `MOVE`, `JOG`, `STATUS_REQUEST`, and rejected or stale ones) do not.
 - The partial upload is a **staging buffer** in device memory, separate from the stored zones. It is never written to persistent storage, never used for any fire decision, and never survives an exit from ZONE_SETUP. The only thing that turns it into a zone is an accepted `ZONE_COMMIT`.
 - **Zone checksum**: CRC-32 (IEEE 802.3, as in zlib) over: zone_id (1 byte), point_count (1 byte), then for each point pan (i16 LE) and tilt (i16 LE).
 - **Commit checks**, in this order, first failure returned, nothing stored on any failure:
@@ -270,7 +270,7 @@ Before the rungs are evaluated, the device evaluates the SAFE_ERROR recovery rul
 | 13 | ON_TIME_LIMIT | 12 | `duration_ms` greater than `per_shot_ms` (default 2000) | Yes, as the shot timer: a `duration_ms` of 0 ends at `per_shot_ms` with this cause |
 | 14 | RATE_LIMIT | 13 | On-time in the last 60 s plus this shot would exceed `per_minute_ms` (default 10000) | No: checked and reserved at grant time, so it cannot lapse mid-shot |
 
-Priorities 1 to 12 are the interlocks re-checked on every tick and message while the effector is on; priority 13 is the shot timer. "Keeps its state" means that apart from the shot ending (DETER to SCANNING) nothing changes: the device stays armed and no fault is latched.
+Priorities 1 to 12 except priority 9 are the interlocks re-checked on every tick and message while the effector is on; priority 9 (`REQUEST_EXPIRED`) is checked once at admission and never again; priority 13 is the shot timer. "Keeps its state" means that apart from the shot ending (DETER to SCANNING) nothing changes: the device stays armed and no fault is latched.
 
 ### 6.1 Reason codes are permanent
 

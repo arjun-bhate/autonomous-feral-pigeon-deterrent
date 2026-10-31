@@ -132,7 +132,7 @@ State transitions (this feature):
 ```text
 BOOT --> HOMING --(complete, simulated drift recorded)--> DISARMED
 DISARMED --(ARM: homed, key on, no fault)--> SCANNING
-SCANNING/DETER/ZONE_SETUP --(DISARM)--> DISARMED      (DISARM is always accepted; in ZONE_SETUP it discards the upload)
+any state except BOOT/HOMING/SAFE_ERROR --(DISARM)--> DISARMED      (DISARM is always accepted and replies OK; it cuts the effector and discards any upload; in BOOT, HOMING and SAFE_ERROR it changes nothing else: no state change, homing is not abandoned)
 SCANNING --(granted fire)--> DETER --(shot ends or any interlock lapses)--> SCANNING
 any state except SAFE_ERROR --(key input on -> off)--> SAFE_ERROR   (effector cut, upload discarded, armed=false, fault KEY_OFF, interlock event)
 any state except BOOT/HOMING/SAFE_ERROR --(heartbeat lost > watchdog)--> SAFE_ERROR   (motion stopped, effector off, upload discarded, fault HEARTBEAT_LOST)

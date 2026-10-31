@@ -45,7 +45,7 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 
 ## E. Safety
 - D-32 [DECIDED] The ESP32 is the final authority on every fire decision. The Pi only relays. The default state on every boot is DISARMED, and homing must finish before arming.
-- D-33 [DECIDED] A fire request is granted only if all are true: arm key on, dashboard armed, homed, heartbeat alive, beam inside elevation limits and outside every no-fire zone plus margin, zone store valid, not in zone setup, on-time limits not exceeded, and a recent person-clear status. Otherwise it is denied with a reason.
+- D-33 [DECIDED] (per-minute part superseded by D-76) A fire request is granted only if all are true: arm key on, dashboard armed, homed, heartbeat alive, beam inside elevation limits and outside every no-fire zone plus margin, zone store valid, not in zone setup, on-time limits not exceeded, and a recent person-clear status. Otherwise it is denied with a reason.
 - D-34 [DECIDED] Person inhibit: the laptop detects people and every heartbeat carries a person-clear status. The ESP32 fails closed if the status is missing. Every fire request carries a time-to-live.
 - D-35 [DECIDED] Hardware: a key switch and a hardware on-time cutoff in series with laser power; an emergency stop; the ESP32 reads the key state; an indicator light shows when the laser has power.
 - D-36 [DECIDED] Laser: 5 mW or less for development and calibration. The 50 mW module is used only in housing-society-approved field trials at dawn or dusk, with wavelength-rated eye protection whenever it is powered. A beam expander was declined by the owner.
@@ -63,7 +63,7 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 - D-46 [DECIDED] Privacy: raw footage and datasets are never committed to Git, published images and videos have people blurred, and all data stays local.
 
 ## G. Feature 001 placeholder values (simulated device only)
-- D-47 [PROVISIONAL] Heartbeat 200 ms; watchdog 1 s; person-clear hold-off 1 s; fire time-to-live 500 ms; on-time cap 2 s per shot and 10 s per minute; simulated aiming error 0.2 degrees; up to 8 zones of 16 points. Confirmed as written by the owner on 2026-10-31. The 2 s per-shot cap is longer than the owner's earlier idea of about 1 s and can be lowered later.
+- D-47 [PROVISIONAL](on-time caps superseded by D-76 and D-79) Heartbeat 200 ms; watchdog 1 s; person-clear hold-off 1 s; fire time-to-live 500 ms; on-time cap 2 s per shot and 10 s per minute; simulated aiming error 0.2 degrees; up to 8 zones of 16 points. Confirmed as written by the owner on 2026-10-31. The 2 s per-shot cap is longer than the owner's earlier idea of about 1 s and can be lowered later.
 
 ## H. Feature 001 plan decisions (2026-10-31)
 - D-48 [DECIDED] Person detected is a fire inhibit, not a fault. While the latest heartbeat reports a person, the ESP32 denies fire requests and cuts the effector if it is on. The device keeps its state and keeps scanning. No fault is latched. Why: the constitution says deny and cut and names no fault state, and a person walking past should not force a manual recovery.
@@ -85,7 +85,7 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 - D-62 [PROVISIONAL] The person-clear hold-off and the heartbeat watchdog both default to 1000 ms. With equal values a silent laptop shows HEARTBEAT_LOST first, and the stale-status denial PERSON_NOT_CLEAR is reachable only when the hold-off is below the watchdog (tests lower it). Both outcomes fail closed. Re-tune in feature 004 with measured Wi-Fi jitter.
 - D-63 [DECIDED] Timing boundaries, all on the device's own clock: a person-clear status is fresh at an age of exactly the hold-off and stale 1 ms later; a fire request is denied before the re-engage delay has elapsed and may be granted at exactly the delay.
 - D-64 [DECIDED] A clear period starts at the receive time of the first accepted clear heartbeat after a person was present. A person report, a stale status, boot, heartbeat loss and SAFE_ERROR recovery restart it.
-- D-65 [DECIDED] A cut caused by a person ends the shot (DETER to SCANNING). The device stays armed, and a cut shot is never resumed without a new fire request.
+- D-65 [DECIDED] A cut caused by a person ends the shot (DETER to SCANNING) (partly superseded by D-78: now goes to COOLDOWN). The device stays armed, and a cut shot is never resumed without a new fire request.
 - D-66 [PROVISIONAL] A re-engage delay of 0 disables the delay. Allowed for now; whether production configuration may use 0 is decided in feature 006.
 
 ## J. Feature 001 plan additions by Claude Code, confirmed by the owner (2026-10-31)
@@ -101,6 +101,15 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 - D-74 [DECIDED] Line endings are pinned to LF with .gitattributes (* text=auto eol=lf). Why: a Windows checkout would otherwise convert files to CRLF and break byte-exact tests such as the reason-code lock.
 - D-75 [DECIDED] Design questions are raised only if they block the current task; otherwise they are logged as open items and settled by the task's test. Why: documents had reached the point of diminishing returns.
 
+## L. Shot control changes (2026-10-31)
+- D-76 [DECIDED] The constitution is amended to v1.1.0. Principle III now requires "the per-shot on-time limit is not exceeded and the post-shot cooldown has elapsed" instead of a per-minute limit. Rationale: the per-minute budget limited total laser time but did not match the owner's use. Eye safety rests on the person-clear rule, no-fire zones, the cooldown and the hardware on-time cutoff, which remains a required second layer. Supersedes the per-minute rule in D-33 and D-47.
+- D-77 [DECIDED] The per-minute budget and the RATE_LIMIT denial are removed. Code 13 is retired and never reused. Next unused code is 16.
+- D-78 [PROVISIONAL] Cooldown: after any shot ends (normal end, FIRE_STOP, or a cut that does not enter SAFE_ERROR) fire is denied with COOLDOWN_ACTIVE (code 15) for cooldown_ms, default 5000, measured on the device clock. The timer survives DISARM, ARM and SAFE_ERROR recovery; only boot clears it. A shot ending in SAFE_ERROR starts no cooldown. A person-caused cut now goes to COOLDOWN, which supersedes the DETER-to-SCANNING wording in D-65.
+- D-79 [DECIDED] duration_ms in FIRE_REQUEST is required and is the maximum on-time for the shot, chosen on the dashboard from 500 to 5000 ms in 500 ms steps. The device checks the range (500 to per_shot_ms, default 5000), not the step. Below 500 is FIELD_RANGE; above per_shot_ms is ON_TIME_LIMIT, checked once at admission. Closes open item 9.
+- D-80 [DECIDED] New message FIRE_STOP (type 0x21), accepted in every state without arbitration. It can only switch the effector off and start the cooldown; it never turns anything on or extends a shot. Why: stopping is the safe direction. The laptop decides when a pigeon is deterred; the ESP32 still enforces the maximum if the laptop fails.
+- D-81 [DECIDED] Manual mode (jog and fire from the dashboard) is wanted for calibration and field testing. Manual fire goes through normal arbitration, including the person-clear rule. Jogging is feature 003, the fire control is feature 006.
+- D-82 [PROVISIONAL] system-scope.md is v1.6: the hardware on-time cutoff must be set at or above per_shot_ms.
+
 ## Open decisions
 1. Where the device sits relative to the perch height, which sets the elevation limits.
 2. The dome's optical test (camera distortion, laser reflection) when it arrives.
@@ -110,7 +119,7 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 6. Video transport and message protocol details (decided in the feature plans).
 7. Detector model and version (decided in the feature 002 plan).
 8. Whether ROS 2 is needed (D-23).
-9. Whether the 2 s per-shot cap (D-47) should be lowered.
+9. [CLOSED by D-79] Whether the 2 s per-shot cap (D-47) should be lowered.
 10. Key switch debouncing and short glitches (D-59), decided in feature 006.
 11. Whether homing failure, homing drift or an internal error should latch, decided in feature 003.
 12. Whether the 5 s re-engage delay (D-50) is right, to be checked with field data in features 006 and 008.
@@ -119,3 +128,6 @@ Status labels: DECIDED = confirmed by the owner. PROVISIONAL = placeholder, easy
 15. Whether the wire format needs a protocol version field so a version mismatch is detected at run time (D-68), decided in feature 003.
 16. Exact behaviour of the zone-upload idle timer at the 5000 ms boundary, decided when firmware conformance matters (feature 003).
 17. DISARM during BOOT has no scenario vector yet; add one in the first task that touches DISARM.
+18. Whether production may use cooldown_ms 0 (D-78), decided in feature 006.
+19. Calibration 3 (feature 004) may need a minimal manual fire control before feature 006's Safety page (D-81).
+20. Whether the laptop may extend a deterrence run by sending repeated fire requests while a pigeon stays visible (feature 005); each request passes full arbitration and the cooldown applies.

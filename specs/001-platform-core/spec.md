@@ -1,6 +1,6 @@
 # Feature Specification: Platform Core (No Hardware)
 
-**Feature Branch**: `001-platform-core` (not yet created; see report)
+**Feature Branch**: 001-platform-core
 
 **Created**: 2026-10-31
 

@@ -184,6 +184,7 @@ The developer has a written protocol definition covering message types, framing,
 **Heartbeat**
 - Heartbeat lost: watchdog stops motion and effector, state becomes SAFE/ERROR. A restored heartbeat does not silently re-arm; the device returns to DISARMED and must be re-armed deliberately.
 - Heartbeats arrive but all report a person, or stop carrying a clear status: fire requests are denied, and the effector is cut if on.
+- Person reappears during the re-engage delay: the delay restarts from zero when person-clear is next reported. Fire requests stay denied (PERSON_NOT_CLEAR while a person is reported, PERSON_CLEAR_DELAY afterwards). A shot that was cut because of a person is never resumed; a new fire request is required.
 
 **Zones**
 - Partial zone upload (connection lost between points and commit): the partial upload is discarded; the stored zones are unchanged; a later fresh upload starts clean.
@@ -238,8 +239,8 @@ The developer has a written protocol definition covering message types, framing,
 - **FR-019**: The simulator MUST accept a simulated key state as an input that a developer or test can set, and MUST report the key state.
 - **FR-020**: Arming MUST require the key on and the device homed; otherwise it MUST be refused with a specific reason. Disarming MUST always be accepted.
 - **FR-021**: The simulator MUST be the only component that decides whether a fire request is granted. The dashboard, the laptop backend and any other component MUST NOT contain a code path that grants or performs a fire, and the laptop side MUST treat the simulator's reply as the only authority.
-- **FR-022**: A fire request MUST be granted only when ALL of these are true: the key is on; the device is armed; the device is homed; the heartbeat is alive; the latest heartbeat reports the person clear and arrived within the hold-off time; the request's time-to-live has not expired; the beam direction is within the elevation limits and outside every stored zone expanded by the safety margin; the zone store is valid; the device is not in ZONE_SETUP; and the per-shot and per-minute on-time limits are not exceeded. Otherwise it MUST be denied with a specific reason.
-- **FR-023**: Fire Denial Reasons: the protocol MUST define a distinct, named reason for each failed condition, at least: KEY_OFF, NOT_ARMED, NOT_HOMED, HEARTBEAT_LOST, PERSON_NOT_CLEAR, REQUEST_EXPIRED, ELEVATION_LIMIT, IN_ZONE_MARGIN, ZONE_STORE_INVALID, ZONE_SETUP, ON_TIME_LIMIT, RATE_LIMIT, FAULT_ACTIVE. When more than one fails, exactly one reason is returned according to a documented priority order.
+- **FR-022**: A fire request MUST be granted only when ALL of these are true: the key is on; the device is armed; the device is homed; the heartbeat is alive; the latest heartbeat reports the person clear and arrived within the hold-off time; person-clear has been reported continuously for at least the re-engage delay (FR-048); the request's time-to-live has not expired; the beam direction is within the elevation limits and outside every stored zone expanded by the safety margin; the zone store is valid; the device is not in ZONE_SETUP; and the per-shot and per-minute on-time limits are not exceeded. Otherwise it MUST be denied with a specific reason.
+- **FR-023**: Fire Denial Reasons: the protocol MUST define a distinct, named reason for each failed condition, at least: KEY_OFF, NOT_ARMED, NOT_HOMED, HEARTBEAT_LOST, PERSON_NOT_CLEAR, PERSON_CLEAR_DELAY, REQUEST_EXPIRED, ELEVATION_LIMIT, IN_ZONE_MARGIN, ZONE_STORE_INVALID, ZONE_SETUP, ON_TIME_LIMIT, RATE_LIMIT, FAULT_ACTIVE. When more than one fails, exactly one reason is returned according to a documented priority order.
 - **FR-024**: Every heartbeat MUST carry a person-clear status, a sequence number and a timestamp. The simulator MUST treat a missing or old person-clear status as "person present" (fail closed) once the hold-off time has passed.
 - **FR-025**: Every fire request MUST carry a time-to-live; the simulator MUST deny any request that arrives after its time-to-live has expired with REQUEST_EXPIRED.
 - **FR-026**: While the simulated effector is on, the simulator MUST keep checking the fire conditions and cut the effector at once when any of them lapses, logging the event and counting it as an interlock event.
@@ -273,6 +274,10 @@ The developer has a written protocol definition covering message types, framing,
 - **FR-045**: Automated tests MUST be written before the implementation of each task, and safety logic MUST have automated tests.
 - **FR-046**: Zone geometry (point-in-polygon with margin, and self-crossing detection) MUST be unit-tested.
 - **FR-047**: A developer-triggered simulated engagement MUST exist to produce traces, logs and metrics, so that Stories 3 to 5 can be exercised without a camera. It MUST obtain its fire decision only from the simulator.
+
+**Person re-engage delay**
+
+- **FR-048**: After a person is no longer reported, the simulator MUST keep denying fire requests with reason PERSON_CLEAR_DELAY until person-clear has been reported continuously for at least the person re-engage delay. The delay is measured on the simulator's own clock, starting when the first clear status of the current clear period is accepted. A new person report, or a missing or stale person-clear status, MUST restart it. A request is denied if less than the delay has elapsed and may be granted at exactly the delay or later when every other condition holds. When the delay ends the simulator MUST NOT fire on its own and MUST NOT resume a shot that was cut; a new fire request is required. This delay is separate from the person-clear hold-off, which limits how old the latest status may be.
 
 ### Key Entities
 
@@ -313,6 +318,7 @@ The developer has a written protocol definition covering message types, framing,
 - **SC-017**: 100% of scenario test vectors pass against the simulator, and the vectors include at least one case for every denial reason, zone rejection reason and timing rule.
 - **SC-018**: The full automated test suite passes on the owner's laptop with no hardware attached, and a new reader can build a valid message from the protocol document alone and predict the simulator's reply for a sample of 5 vectors.
 - **SC-019**: 0 code paths outside the simulated ESP32 can grant or perform a fire, verified by a review and an automated check of the laptop and dashboard code.
+- **SC-020**: In the automated tests, 100% of fire requests made 1 ms before the re-engage delay has elapsed are denied PERSON_CLEAR_DELAY; 100% made at exactly the delay, with every other condition holding, are granted; 100% of tests in which a person is reported again during the delay restart it; and 0 cut shots resume without a new fire request.
 
 ## Assumptions
 
@@ -321,6 +327,7 @@ The developer has a written protocol definition covering message types, framing,
 - **Fire requests come only from test and developer tooling**: In this feature no component decides to fire. Fire requests are issued by automated tests and by a developer-triggered simulated engagement, and the simulator is the only decider. There is no Arm or Fire button on the Overview; the arm and key interface belongs to the Safety page in feature 006.
 - **Simulated key and effector**: The key state is an input that tests or a developer set, and the effector is a simulated on/off state with on-time tracking. No real laser, key or emergency stop exists.
 - **Configurable defaults (provisional)**: Heartbeat interval 200 ms; heartbeat-loss watchdog 1 s; person-clear hold-off 1 s; fire-request time-to-live 500 ms; per-shot on-time 2 s; per-minute on-time 10 s; simulated aiming error 0.2 degrees. These are starting values, set in the protocol document, tunable without changing the protocol, and re-baselined in features 003 and 006. Every value is named in the document so tests can set it.
+- **Person re-engage delay (provisional)**: 5 s by default, configurable, set by the owner on 2026-10-31 and not yet validated against real behaviour; to be re-baselined in feature 006. It is a different value from the person-clear hold-off.
 - **Zone limits**: Defaults of 8 zones and 16 points per zone, taken from the suggestion in docs/system-scope.md. The final limits remain open decision 5 and are set in the plan.
 - **Aiming error**: Real aiming error is measured in a later feature. Here it is a configurable constant so the margin rule (0.5 degrees plus aiming error) is already tested.
 - **Elevation limits**: The elevation limits depend on device placement (open decision 1). Here they are configurable simulated limits.

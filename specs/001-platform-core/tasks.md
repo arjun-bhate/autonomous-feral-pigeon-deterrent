@@ -130,7 +130,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-016, FR-015, SC-006
   - **Depends**: T006, T008, T009, T012, T004
 
-- [ ] T015b [US6] Add the sequence rule (step 4) to `device.py` part 1b: new sequence accepted, duplicate replays the cached reply with no second action, stale rejected `STALE_SEQ`; first message after boot accepted whatever its number. Reply cache of 8. A message rejected at steps 5 to 8 still consumes its sequence number (protocol.md section 3). Steps 1 to 3 emit a rate-limited `REJECT_NOTICE` (at most 5 per second).
+- [X] T015b [US6] Add the sequence rule (step 4) to `device.py` part 1b: new sequence accepted, duplicate replays the cached reply with no second action, stale rejected `STALE_SEQ`; first message after boot accepted whatever its number. Reply cache of 8. A message rejected at steps 5 to 8 still consumes its sequence number (protocol.md section 3). Steps 1 to 3 emit a rate-limited `REJECT_NOTICE` (at most 5 per second).
   - **Tests first**: extend `tests/unit/test_device_intake.py`: the first message after boot is accepted whatever its number (try 0, 1, 40000 and 65535 on fresh devices); duplicate gets identical reply bytes and exactly one action (use a counting stub handler); older sequence rejected; sequence wrap at 65535 to 0 accepted; gap accepted; a message rejected at steps 5 to 8 still consumes its sequence number; REJECT_NOTICE capped at 5 per second on the FakeClock.
   - **Covers**: FR-029, FR-016, SC-007
   - **Depends**: T015a

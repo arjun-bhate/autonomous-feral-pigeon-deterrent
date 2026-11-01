@@ -183,3 +183,163 @@ def test_a_frame_split_across_two_deliveries_is_still_one_message(harness):
 
 def test_build_frame_is_what_the_harness_sends():
     assert host_frame(Home(), 3) == build_frame(0x01, 3, b"")
+
+
+# ---- T015b: the sequence rule (step 4) and the REJECT_NOTICE rate limit ---------------------
+
+
+class CountingHandler:
+    """A stand-in command handler that counts how many times the device really acted."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, message):
+        self.calls += 1
+        return Reply.ok(message.TYPE)
+
+
+def with_counter(harness: Harness) -> CountingHandler:
+    counter = CountingHandler()
+    harness.device.handlers[Heartbeat] = counter
+    return counter
+
+
+def heartbeat_wire(seq: int) -> bytes:
+    return host_frame(Heartbeat(True, 0), seq)
+
+
+@pytest.mark.parametrize("seq", [0, 1, 40000, 65535])
+def test_the_first_message_after_boot_is_accepted_whatever_its_number(seq):
+    fresh = Harness(boot_duration_ms=10_000)
+    counter = with_counter(fresh)
+    (out,) = fresh.send_wire(heartbeat_wire(seq))
+    assert out.message.result is Result.OK
+    assert counter.calls == 1
+
+
+def test_a_duplicate_gets_identical_reply_bytes_and_exactly_one_action(harness):
+    counter = with_counter(harness)
+    (first,) = harness.send_wire(heartbeat_wire(10))
+    (second,) = harness.send_wire(heartbeat_wire(10))
+    assert second.raw == first.raw
+    assert counter.calls == 1
+
+
+def test_an_older_sequence_is_rejected_stale_and_not_acted_on(harness):
+    counter = with_counter(harness)
+    harness.send_wire(heartbeat_wire(10))
+    (out,) = harness.send_wire(heartbeat_wire(5))
+    assert out.message == Reply.rejected(MsgType.HEARTBEAT, RejectCode.STALE_SEQ)
+    assert out.seq == 5
+    assert counter.calls == 1
+
+
+def test_the_cache_holds_eight_replies(harness):
+    counter = with_counter(harness)
+    for seq in range(1, 11):
+        harness.send_wire(heartbeat_wire(seq))
+    assert counter.calls == 10
+    # 3 to 10 are cached: replayed, no action.
+    harness.send_wire(heartbeat_wire(3))
+    harness.send_wire(heartbeat_wire(10))
+    assert counter.calls == 10
+    # 1 and 2 have been pushed out of the cache and are now simply old.
+    for seq in (1, 2):
+        (out,) = harness.send_wire(heartbeat_wire(seq))
+        assert out.message == Reply.rejected(MsgType.HEARTBEAT, RejectCode.STALE_SEQ)
+    assert counter.calls == 10
+
+
+def test_sequence_wrap_from_65535_to_0_is_accepted(harness):
+    counter = with_counter(harness)
+    harness.send_wire(heartbeat_wire(65535))
+    (out,) = harness.send_wire(heartbeat_wire(0))
+    assert out.message.result is Result.OK
+    assert counter.calls == 2
+
+
+def test_a_gap_in_the_numbers_is_accepted(harness):
+    counter = with_counter(harness)
+    harness.send_wire(heartbeat_wire(1))
+    (out,) = harness.send_wire(heartbeat_wire(500))
+    assert out.message.result is Result.OK
+    assert counter.calls == 2
+
+
+def test_the_far_side_of_the_circle_is_stale(harness):
+    counter = with_counter(harness)
+    harness.send_wire(heartbeat_wire(100))
+    (out,) = harness.send_wire(heartbeat_wire(100 + 32768))  # distance 32768: not "forward"
+    assert out.message == Reply.rejected(MsgType.HEARTBEAT, RejectCode.STALE_SEQ)
+    (out,) = harness.send_wire(heartbeat_wire(100 + 32767))  # distance 32767: forward
+    assert out.message.result is Result.OK
+    assert counter.calls == 2
+
+
+def test_a_message_rejected_at_steps_5_to_8_still_consumes_its_sequence_number(harness):
+    harness.send_raw(0x77, seq=5)  # step 5 failure
+    # The same number again is a duplicate: the cached rejection is replayed.
+    (replay,) = harness.send_raw(0x77, seq=5)
+    assert isinstance(replay.message, GenericReject)
+    # A valid message with that number is not processed either.
+    counter = with_counter(harness)
+    (again,) = harness.send_wire(heartbeat_wire(5))
+    assert counter.calls == 0
+    assert isinstance(again.message, GenericReject)
+    # And a lower number is now stale.
+    (old,) = harness.send_wire(heartbeat_wire(4))
+    assert old.message == Reply.rejected(MsgType.HEARTBEAT, RejectCode.STALE_SEQ)
+
+
+def test_a_length_rejection_consumes_its_number_and_is_replayed_unchanged(harness):
+    counter = with_counter(harness)
+    (first,) = harness.send_raw(MsgType.HEARTBEAT, b"\x01", seq=8)
+    (second,) = harness.send_wire(heartbeat_wire(8))
+    assert second.raw == first.raw
+    assert counter.calls == 0
+
+
+def test_a_stale_message_with_an_unknown_type_gets_the_generic_reject(harness):
+    harness.send_wire(heartbeat_wire(50))
+    (out,) = harness.send_raw(0x77, seq=3)
+    assert isinstance(out.message, GenericReject)
+
+
+def notices(harness: Harness):
+    return harness.events_of(0xC1)
+
+
+def test_reject_notice_is_capped_at_five_per_second(harness):
+    for _ in range(10):
+        harness.send_wire(bad_crc_wire())
+    assert len(notices(harness)) == 5
+    harness.clock.advance(999)
+    harness.send_wire(bad_crc_wire())
+    assert len(notices(harness)) == 5
+    harness.clock.advance(1)  # exactly one second after the first five
+    harness.send_wire(bad_crc_wire())
+    assert len(notices(harness)) == 6
+
+
+def test_reject_notice_carries_the_cause_and_the_running_total(harness):
+    harness.send_wire(bad_crc_wire())
+    harness.send_wire(truncated_wire())
+    first, second = [o.message for o in notices(harness)]
+    assert (first.cause, first.total_count) == (RejectCode.BAD_CRC, 1)
+    assert (second.cause, second.total_count) == (RejectCode.TRUNCATED, 2)
+
+
+def test_every_rejection_is_still_counted_when_the_notice_is_suppressed(harness):
+    for _ in range(10):
+        harness.send_wire(bad_crc_wire())
+    assert harness.device.reject_counts[RejectCode.BAD_CRC] == 10
+
+
+def test_stale_and_duplicate_messages_are_not_counted_as_frame_failures(harness):
+    with_counter(harness)
+    harness.send_wire(heartbeat_wire(10))
+    harness.send_wire(heartbeat_wire(10))
+    harness.send_wire(heartbeat_wire(2))
+    assert harness.device.reject_counts == {}
+    assert notices(harness) == []

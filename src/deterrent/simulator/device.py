@@ -21,13 +21,14 @@ from collections.abc import Callable
 
 from deterrent.clock import Clock, elapsed_ms
 from deterrent.config import PAN_SOFT_LIMIT_CDEG, TILT_SOFT_LIMIT_CDEG, Settings
-from deterrent.protocol.codes import MsgType, RejectCode, Result, State
+from deterrent.protocol.codes import DenyReason, Fault, MsgType, RejectCode, Result, State
 from deterrent.protocol.framing import Frame, FrameError, FrameReader
 from deterrent.protocol.messages import (
     Arm,
     DeviceMessage,
     Disarm,
     GenericReject,
+    Heartbeat,
     Home,
     HostMessage,
     Jog,
@@ -40,6 +41,7 @@ from deterrent.protocol.messages import (
     decode_host_message,
     device_frame,
     pack_angles,
+    pack_heartbeat_data,
 )
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
@@ -83,6 +85,8 @@ class Device:
         self.effector_on = False
         self.fault_mask = 0
         self.key_on = False
+        self._heartbeat_seen = False
+        self._last_heartbeat_ms = 0
 
         self._boot_started_ms = clock.now_ms()
         self._homing_started_ms = 0
@@ -105,6 +109,7 @@ class Device:
             Jog: self._on_jog,
             Arm: self._on_arm,
             Disarm: self._on_disarm,
+            Heartbeat: self._on_heartbeat,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -183,6 +188,8 @@ class Device:
     def _service(self) -> None:
         """Everything that happens because time passed. Runs on every tick and message."""
         now = self.now_ms()
+        self._check_watchdog(now)
+        self._check_recovery()
         if self.state is State.BOOT:
             if elapsed_ms(now, self._boot_started_ms) >= self._boot_duration_ms:
                 self._homing_started_ms = now
@@ -191,6 +198,40 @@ class Device:
             if elapsed_ms(now, self._homing_started_ms) >= self.settings.homing_duration_ms:
                 self._finish_homing()
         self._send_status_if_due()
+
+    def _check_watchdog(self, now: int) -> None:
+        """No accepted heartbeat for more than watchdog_ms means the host is gone."""
+        if (
+            self._heartbeat_seen
+            and not self.fault_mask & Fault.HEARTBEAT_LOST
+            and elapsed_ms(now, self._last_heartbeat_ms) > self.settings.watchdog_ms
+        ):
+            self._enter_safe_error(Fault.HEARTBEAT_LOST, DenyReason.HEARTBEAT_LOST)
+
+    def _enter_safe_error(self, fault: Fault, cause: DenyReason) -> None:
+        """Latch a fault and go to SAFE_ERROR: armed is cleared and the lapse is counted."""
+        self.fault_mask |= int(fault)
+        self._sink.interlock_event(self.now_ms(), cause)
+        if self.state is State.SAFE_ERROR:
+            return  # already there; only the extra fault is recorded
+        self.armed = False
+        if self.state is State.HOMING:
+            self.homed = False  # homing is abandoned, not resumed
+        self._set_state(State.SAFE_ERROR)
+
+    def _check_recovery(self) -> None:
+        """Leave SAFE_ERROR once every latched fault's clearing condition is true.
+
+        HEARTBEAT_LOST is cleared by an accepted heartbeat (in its handler); KEY_OFF
+        clears when the key is on. Any other bit never clears. The device arrives in
+        DISARMED and is never re-armed by itself.
+        """
+        if self.state is not State.SAFE_ERROR:
+            return
+        if self.fault_mask & Fault.KEY_OFF and self.key_on:
+            self.fault_mask &= ~int(Fault.KEY_OFF)
+        if self.fault_mask == 0:
+            self._set_state(State.DISARMED)
 
     def _finish_homing(self) -> None:
         self.homed = True
@@ -333,6 +374,18 @@ class Device:
             self.armed = False
             self._set_state(State.DISARMED)
         return Reply.ok(MsgType.DISARM)
+
+    def _on_heartbeat(self, message: Heartbeat) -> Reply:
+        """The host is alive. Allowed in every state except BOOT."""
+        if self.state is State.BOOT:
+            return Reply.rejected(MsgType.HEARTBEAT, RejectCode.WRONG_STATE)
+        now = self.now_ms()
+        self._heartbeat_seen = True
+        self._last_heartbeat_ms = now
+        if self.fault_mask & Fault.HEARTBEAT_LOST:
+            self.fault_mask &= ~int(Fault.HEARTBEAT_LOST)
+            self._check_recovery()
+        return Reply.ok(MsgType.HEARTBEAT, pack_heartbeat_data(now, self.state))
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

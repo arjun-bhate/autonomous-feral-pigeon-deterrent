@@ -115,6 +115,7 @@ def test_a_zero_jog_changes_nothing_and_reports_no_angle_event():
 def test_motion_is_refused_wrong_state_in_safe_error():
     harness = Harness.homed()
     harness.device.state = State.SAFE_ERROR  # state forced for this test
+    harness.device.fault_mask = 1  # SAFE_ERROR always has a latched fault
     assert harness.reply(Move(1, 1)) == refused(MsgType.MOVE, RejectCode.WRONG_STATE)
     assert harness.reply(Jog(1, 1)) == refused(MsgType.JOG, RejectCode.WRONG_STATE)
 
@@ -139,6 +140,7 @@ def test_home_is_wrong_state_outside_disarmed():
     for state in (State.SCANNING, State.DETER, State.COOLDOWN, State.ZONE_SETUP, State.SAFE_ERROR):
         harness = Harness.homed()
         harness.device.state = state
+        harness.device.fault_mask = 1 if state is State.SAFE_ERROR else 0
         assert harness.reply(Home()) == refused(MsgType.HOME, RejectCode.WRONG_STATE)
         assert harness.device.state is state
 

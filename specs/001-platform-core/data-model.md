@@ -139,8 +139,8 @@ DETER --(DISARM)--> DISARMED   (effector cut, cooldown starts and keeps running)
 COOLDOWN --(cooldown_ms elapsed on the device clock)--> SCANNING
 any state --(FIRE_STOP)--> unchanged   (only a running shot is ended: DETER --> COOLDOWN; otherwise reply OK and nothing changes)
 any state except SAFE_ERROR --(key input on -> off)--> SAFE_ERROR   (effector cut, upload discarded, armed=false, fault KEY_OFF, interlock event)
-any state except BOOT/HOMING/SAFE_ERROR --(heartbeat lost > watchdog)--> SAFE_ERROR   (motion stopped, effector off, upload discarded, fault HEARTBEAT_LOST)
-SAFE_ERROR --(every latched fault's clearing condition true: heartbeat accepted for HEARTBEAT_LOST, key input on for KEY_OFF)--> DISARMED   (never re-arms; no clear command)
+any state except BOOT --(heartbeat lost > watchdog, after the first accepted heartbeat)--> SAFE_ERROR   (motion stopped, effector off, upload discarded, fault HEARTBEAT_LOST; in HOMING, homing is abandoned and homed stays false; already in SAFE_ERROR it only adds the fault)
+SAFE_ERROR --(every latched fault's clearing condition true: heartbeat accepted for HEARTBEAT_LOST, key input on for KEY_OFF)--> DISARMED   (never re-arms; no clear command; homed stays false if homing was abandoned, so a HOME is needed before ARM)
 DISARMED --(ZONE_BEGIN accepted)--> ZONE_SETUP
 ZONE_SETUP --(ZONE_COMMIT accepted: zone stored atomically)--> DISARMED
 ZONE_SETUP --(ZONE_COMMIT rejected: nothing stored)--> DISARMED

@@ -212,7 +212,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-021, FR-019, FR-039, FR-042
   - **Depends**: T027
 
-- [ ] T029 [US6] Create `src/deterrent/simulator/runner.py`: async wrapper that owns a device, feeds it bytes from a link, calls `tick` at most 10 ms apart, and publishes reply and event bytes. No decision logic inside.
+- [X] T029 [US6] Create `src/deterrent/simulator/runner.py`: async wrapper that owns a device, feeds it bytes from a link, calls `tick` at most 10 ms apart, and publishes reply and event bytes. No decision logic inside.
   - **Tests first**: `tests/integration/test_sim_runner.py` (async, FakeClock-driven): bytes in produce reply bytes out; ticks fire at least every 10 ms of FakeClock time; stopping the runner stops the ticks; the runner cannot change a decision (a spy confirms it never touches arbitration inputs).
   - **Covers**: FR-015, FR-043, FR-026
   - **Depends**: T028

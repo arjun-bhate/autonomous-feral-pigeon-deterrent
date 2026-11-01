@@ -49,7 +49,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-043, FR-045
   - **Depends**: T001
 
-- [ ] T003 Create `config/default.toml` and `src/deterrent/config.py` (settings loader with environment override). Every tunable value from protocol.md section 8 with its unit in the name: `heartbeat_interval_ms` 200, `watchdog_ms` 1000, `person_clear_holdoff_ms` 1000, `person_reengage_delay_ms` 5000, `fire_ttl_ms` 500, `command_ttl_ms` 500, `per_shot_ms` 5000, `cooldown_ms` 5000, `zone_upload_timeout_ms` 5000, `homing_duration_ms` 3000, `aiming_error_cdeg` 20, `max_zones` 8, `max_points_per_zone` 16, `elevation_min_cdeg` 0, `elevation_max_cdeg` 8000. Fixed constants (not configurable): minimum `duration_ms` 500, soft limits pan 24000 and tilt 8000 centidegrees.
+- [X] T003 Create `config/default.toml` and `src/deterrent/config.py` (settings loader with environment override). Every tunable value from protocol.md section 8 with its unit in the name: `heartbeat_interval_ms` 200, `watchdog_ms` 1000, `person_clear_holdoff_ms` 1000, `person_reengage_delay_ms` 5000, `fire_ttl_ms` 500, `command_ttl_ms` 500, `per_shot_ms` 5000, `cooldown_ms` 5000, `zone_upload_timeout_ms` 5000, `homing_duration_ms` 3000, `aiming_error_cdeg` 20, `max_zones` 8, `max_points_per_zone` 16, `elevation_min_cdeg` 0, `elevation_max_cdeg` 8000. Fixed constants (not configurable): minimum `duration_ms` 500, soft limits pan 24000 and tilt 8000 centidegrees.
   - **Tests first**: `tests/unit/test_config.py`: every default equals the table above; an environment override changes one value; `per_shot_ms` below 500 is refused; negative timings are refused; the file contains no secrets.
   - **Covers**: FR-034, FR-036, FR-018
   - **Depends**: T001

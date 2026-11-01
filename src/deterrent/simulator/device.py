@@ -38,6 +38,7 @@ from deterrent.protocol.messages import (
     Disarm,
     EffectorEventMessage,
     FireRequest,
+    FireStop,
     GenericReject,
     Heartbeat,
     Home,
@@ -143,6 +144,7 @@ class Device:
             ZoneList: self._on_zone_list,
             ZoneClear: self._on_zone_clear,
             FireRequest: self._on_fire_request,
+            FireStop: self._on_fire_stop,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -559,6 +561,23 @@ class Device:
         self._sink.effector_on(now)
         self._send_event(EffectorEventMessage(EffectorEvent.ON, 0))
         return Reply.granted(now)
+
+    def _on_fire_stop(self, message: FireStop) -> Reply:
+        """Accepted in every state, with no arbitration. It can only switch the effector off.
+
+        If a shot is running it ends: effector off, the host-stop event, the cooldown
+        starts and DETER goes to COOLDOWN. The device stays armed, no fault is latched
+        and it is not counted as an interlock lapse. With no shot running, nothing at all
+        changes.
+        """
+        if self.effector_on:
+            now = self.now_ms()
+            self.effector_on = False
+            self._sink.effector_stopped_by_host(now)
+            self._send_event(EffectorEventMessage(EffectorEvent.STOPPED_BY_HOST, 0))
+            self._cooldown_started_ms = now
+            self._set_state(State.COOLDOWN)
+        return Reply.ok(MsgType.FIRE_STOP)
 
     def cooldown_running(self) -> bool:
         """Is a cooldown running? Decided only by the device clock, whatever the state."""

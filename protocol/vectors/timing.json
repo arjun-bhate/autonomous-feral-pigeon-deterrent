@@ -1,4 +1,61 @@
 {
   "protocol_version": "0.1",
-  "vectors": []
+  "vectors": [
+    {
+      "id": "key.recover.key_alone_not_enough",
+      "description": "After heartbeat loss, the key being on is not enough: with no heartbeats the state stays SAFE_ERROR.",
+      "covers": ["key:RECOVERY", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}},
+        {"at_ms": 2000, "action": "set_key", "on": true},
+        {"at_ms": 5000, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}
+    },
+    {
+      "id": "key.recover.both_faults",
+      "description": "Key off (500 ms) and heartbeat lost (1401 ms) together: the key comes back first (2000 ms) and the device stays in SAFE_ERROR; only when a heartbeat also returns (3000 ms) is it DISARMED.",
+      "covers": ["key:RECOVERY", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 400, "every_ms": 200}, {"from_ms": 3000, "until_ms": 3200, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 500, "action": "set_key", "on": false},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"]}},
+        {"at_ms": 1401, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF", "HEARTBEAT_LOST"]}},
+        {"at_ms": 2000, "action": "set_key", "on": true},
+        {"at_ms": 2100, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}},
+        {"at_ms": 2999, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}},
+        {"at_ms": 3100, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "armed": false}}
+      ],
+      "expect": {"state": "DISARMED", "fault_mask": [], "armed": false}
+    },
+    {
+      "id": "disarm.safe_error_heartbeat_lost_stays",
+      "description": "SAFE_ERROR entered by heartbeat loss with the key on: DISARM replies OK but the state stays SAFE_ERROR, the fault HEARTBEAT_LOST stays latched and armed is false.",
+      "covers": ["disarm:SAFE_ERROR_NO_CHANGE", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}},
+        {"at_ms": 1100, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1150, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false}
+    },
+    {
+      "id": "disarm.during_homing_continues",
+      "description": "homing_duration_ms 3000, boot at 0, heartbeats every 200 ms: DISARM at 1000 ms replies OK but homing is not abandoned. The state is HOMING at 1000 and 2900 ms and DISARMED at 3100 ms with homed true, armed false, no fault, and exactly one homing-drift record.",
+      "covers": ["disarm:HOMING_NO_CHANGE", "timing:homing_duration_ms"],
+      "config": {"homing_duration_ms": 3000},
+      "initial": {"state": "BOOT", "homed": false, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 3100, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 1000, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "HOMING", "armed": false}},
+        {"at_ms": 2900, "action": "expect", "expect": {"state": "HOMING", "homed": false}},
+        {"at_ms": 3100, "action": "expect", "expect": {"state": "DISARMED", "homed": true, "armed": false, "fault_mask": [], "counters": {"homing_drift": 1}}}
+      ],
+      "expect": {"state": "DISARMED", "homed": true, "armed": false, "fault_mask": [], "counters": {"homing_drift": 1}}
+    }
+  ]
 }

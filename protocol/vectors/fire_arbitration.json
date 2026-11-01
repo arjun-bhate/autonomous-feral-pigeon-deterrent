@@ -955,6 +955,139 @@
         {"at_ms": 1300, "action": "expect", "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}]}}
       ],
       "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}]}
+    },
+    {
+      "id": "key.off.in_zone_setup",
+      "description": "Key off in the middle of a zone upload: SAFE_ERROR with fault KEY_OFF, armed false, the upload is gone, the store is unchanged (the same as zone.setup.exit5.key_off).",
+      "covers": ["key:ANY_STATE", "setup:EXIT_5"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "set_key", "on": false},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false, "zones": [1]}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "zones": [1]}
+    },
+    {
+      "id": "key.off.while_armed",
+      "description": "Armed and scanning, the key is turned off: SAFE_ERROR (not DISARMED), armed false, fault KEY_OFF, and exactly one interlock count with cause KEY_OFF.",
+      "covers": ["key:ANY_STATE", "key:EDGE_NOT_LEVEL"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 300}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false}
+      ],
+      "expect": {"state": "SAFE_ERROR", "armed": false, "fault_mask": ["KEY_OFF"], "counters": {"interlock.KEY_OFF": 1, "interlock.total": 1}}
+    },
+    {
+      "id": "key.off.while_firing",
+      "description": "A granted shot is running and the key is turned off: the effector is cut with cause KEY_OFF within 100 ms and the state is SAFE_ERROR.",
+      "covers": ["key:ANY_STATE", "interlock:KEY_OFF"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 600}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 500, "action": "set_key", "on": false}
+      ],
+      "expect": {"state": "SAFE_ERROR", "effector_on": false, "armed": false, "fault_mask": ["KEY_OFF"], "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "KEY_OFF", "within_ms": 100}]}
+    },
+    {
+      "id": "key.off.in_disarmed",
+      "description": "Key off while DISARMED gives the same result as when armed: SAFE_ERROR with fault KEY_OFF.",
+      "covers": ["key:ANY_STATE"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 300}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false}
+      ],
+      "expect": {"state": "SAFE_ERROR", "armed": false, "fault_mask": ["KEY_OFF"]}
+    },
+    {
+      "id": "key.off.at_boot_is_not_an_event",
+      "description": "Boot with the key already off: homing completes and the device is DISARMED with no fault and no interlock count (the trigger is the change, not the level); ARM is rejected KEY_OFF.",
+      "covers": ["key:EDGE_NOT_LEVEL"],
+      "config": {"homing_duration_ms": 1000},
+      "initial": {"state": "BOOT", "homed": false, "armed": false, "key_on": false},
+      "heartbeats": [{"from_ms": 200, "until_ms": 1300}],
+      "steps": [
+        {"at_ms": 1200, "action": "expect", "expect": {"state": "DISARMED", "homed": true, "fault_mask": []}},
+        {"at_ms": 1300, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "KEY_OFF"}}
+      ],
+      "expect": {"state": "DISARMED", "fault_mask": [], "armed": false, "counters": {"interlock.total": 0}}
+    },
+    {
+      "id": "key.recover.key_on_clears",
+      "description": "After a key-off SAFE_ERROR, turning the key on with heartbeats continuing gives DISARMED, armed false, no fault; a fire request is denied NOT_ARMED.",
+      "covers": ["key:RECOVERY"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 600}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 300, "action": "set_key", "on": true},
+        {"at_ms": 400, "action": "expect", "expect": {"state": "DISARMED", "armed": false, "fault_mask": []}},
+        {"at_ms": 500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "NOT_ARMED"}}
+      ],
+      "expect": {"state": "DISARMED", "armed": false, "fault_mask": []}
+    },
+    {
+      "id": "key.recover.not_rearmed",
+      "description": "The device never re-arms by itself: 5 s after recovery it is still DISARMED and not armed; only an ARM message arms it (then SCANNING).",
+      "covers": ["key:NEVER_REARMS", "key:RECOVERY"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5600}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 300, "action": "set_key", "on": true},
+        {"at_ms": 5400, "action": "expect", "expect": {"state": "DISARMED", "armed": false}},
+        {"at_ms": 5500, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 5600, "action": "expect", "expect": {"state": "SCANNING", "armed": true}}
+      ],
+      "expect": {"state": "SCANNING", "armed": true}
+    },
+    {
+      "id": "key.recover.heartbeat_alone_not_enough",
+      "description": "A key-off SAFE_ERROR is not cleared by heartbeats alone: with the key still off the state stays SAFE_ERROR, a fire request is denied KEY_OFF and ARM is rejected KEY_OFF.",
+      "covers": ["key:RECOVERY", "key:LIVE_LEVEL", "deny:KEY_OFF"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 3100}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 3000, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"]}},
+        {"at_ms": 3000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "KEY_OFF"}},
+        {"at_ms": 3100, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "KEY_OFF"}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false}
+    },
+    {
+      "id": "key.recover.key_on_but_fault_unclear",
+      "description": "The key comes back on while another fault bit (INTERNAL, injected, it never clears in this feature) is set: the device stays in SAFE_ERROR and a fire request is denied FAULT_ACTIVE.",
+      "covers": ["key:FAULT_PRIORITY", "key:RECOVERY", "deny:FAULT_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 600}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 200, "action": "inject", "fields": {"fault_mask": ["KEY_OFF", "INTERNAL"]}},
+        {"at_ms": 300, "action": "set_key", "on": true},
+        {"at_ms": 400, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["INTERNAL"], "armed": false}},
+        {"at_ms": 500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "FAULT_ACTIVE", "data": {"fault_mask": ["INTERNAL"]}}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["INTERNAL"]}
+    },
+    {
+      "id": "key.disarm_in_safe_error",
+      "description": "In SAFE_ERROR caused by key off, DISARM replies OK and the state stays SAFE_ERROR (the key is still off).",
+      "covers": ["disarm:SAFE_ERROR_NO_CHANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 300}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 200, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 250, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"]}
     }
   ]
 }

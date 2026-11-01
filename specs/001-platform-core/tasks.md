@@ -277,7 +277,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-041, FR-031, FR-032, FR-033, FR-035, FR-037, SC-011, SC-012, SC-017
   - **Depends**: T034, T023
 
-- [ ] T040 [US7] Add the key-off, SAFE_ERROR recovery and DISARM vectors (contract section 6.2) to `fire_arbitration.json` and `timing.json`: key off while armed, firing, in DISARMED and in ZONE_SETUP; boot with key off is not an event; recovery with key on, never re-arms, heartbeat alone and key alone not enough, both faults, non-clearing fault; DISARM in SAFE_ERROR and during HOMING.
+- [X] T040 [US7] Add the key-off, SAFE_ERROR recovery and DISARM vectors (contract section 6.2) to `fire_arbitration.json` and `timing.json`: key off while armed, firing, in DISARMED and in ZONE_SETUP; boot with key off is not an event; recovery with key on, never re-arms, heartbeat alone and key alone not enough, both faults, non-clearing fault; DISARM in SAFE_ERROR and during HOMING.
   - **Tests first**: `tests/contract/test_vectors.py`; tags `key:*` and `disarm:*` as listed in the contract.
   - **Covers**: FR-027, FR-020, FR-041, SC-010, SC-017
   - **Depends**: T038, T019b

@@ -29,11 +29,12 @@ Fields:
 | `covers` | list of tags: `deny:KEY_OFF`, `zone:ZONE_SELF_CROSSING`, `timing:watchdog_ms`, `framing:BAD_CRC`, `seq:DUPLICATE` |
 | `config` | overrides of named timing and limit values (section 8 of the protocol) |
 | `initial` | starting conditions (below) |
+| `heartbeats` | optional list of heartbeat schedules the runner sends for the vector: `{from_ms, until_ms, every_ms?, person_clear?}` (both ends included, `every_ms` defaults to `heartbeat_interval_ms`, `person_clear` defaults to true). At an instant where a step also happens, the scheduled heartbeat is sent first. Without it no heartbeat is sent after the one implied by `initial` |
 | `steps` | ordered list of timed steps |
 | `expect` | final expectations |
 
 `initial` (all optional; unlisted fields take the "booted, homed, disarmed, key off, no zones, heartbeat fresh and clear" default):
-`state`, `homed`, `armed`, `key_on`, `pan_cdeg`, `tilt_cdeg`, `heartbeat_age_ms` (or `no_heartbeat`), `person_clear`, `person_clear_age_ms`, `clear_streak_ms` (how long the current clear period has lasted; the default is longer than `person_reengage_delay_ms`, so the re-engage delay has already elapsed), `zones` (list of `{zone_id, points}`), `zone_store_corrupt`, `zone_storage_unreadable`, `cooldown_remaining_ms` (a cooldown is running with this many ms left; absent means none), `fault_mask`, `last_seq`.
+`state`, `homed`, `armed`, `key_on`, `pan_cdeg`, `tilt_cdeg`, `heartbeat_age_ms` (or `no_heartbeat`), `person_clear`, `person_clear_age_ms`, `clear_streak_ms` (how long the current clear period has lasted; the default is longer than `person_reengage_delay_ms`, so the re-engage delay has already elapsed), `zones` (list of `{zone_id, points}`), `zone_store_corrupt`, `zone_storage_unreadable`, `zone_storage_mode` (`ok`, `full` or `locked`: persistent storage refuses writes), `cooldown_remaining_ms` (a cooldown is running with this many ms left; absent means none), `fault_mask`, `last_seq`.
 
 `steps`, each with `at_ms` (time on the device clock since the start of the vector) and one `action`:
 
@@ -44,8 +45,9 @@ Fields:
 | `set_key` | `on` |
 | `inject` | any subset of the `initial` fields, applied mid-vector (test-only, same guard as `initial`), e.g. `zone_store_corrupt` while a shot is running |
 | `advance` | nothing; time moves to `at_ms`, device ticks |
+| `expect` | `expect`: the same fields as the final `expect`, checked at `at_ms` (so a vector can show "still DETER at 1499, COOLDOWN at 1500") |
 
-`message`: `{ "type": "FIRE_REQUEST", "seq": 7, "fields": { "issued_at_ms": 1000, "ttl_ms": 500, ... } }`. The runner turns this into wire bytes with the reference encoder, so authors do not hand-compute CRCs. A `send_raw` step is used when the test is about the bytes themselves.
+`message`: `{ "type": "FIRE_REQUEST", "seq": 7, "fields": { "issued_at_ms": 1000, "ttl_ms": 500, ... } }`. `seq` is optional: unless a vector needs a specific number, the runner numbers messages itself, one more than the last number it used. The runner turns this into wire bytes with the reference encoder, so authors do not hand-compute CRCs. A `send_raw` step is used when the test is about the bytes themselves.
 
 `expect_reply`: `{ "result": "DENIED", "code": "KEY_OFF", "data": { ... } }` or `"none"`.
 

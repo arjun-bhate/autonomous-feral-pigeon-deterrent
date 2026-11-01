@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vector-schema.json",
+  "title": "Scenario vector file",
+  "description": "Format of every file in protocol/vectors/ (specs/001-platform-core/contracts/scenario-vectors.md sections 1 and 2). Vectors name reasons and never write reason numbers.",
+  "type": "object",
+  "required": ["protocol_version", "vectors"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "vectors": { "type": "array", "items": { "$ref": "#/$defs/vector" } }
+  },
+  "$defs": {
+    "name": {
+      "description": "A symbolic name such as KEY_OFF. Numbers are never allowed here.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "uint": { "type": "integer", "minimum": 0 },
+    "stateName": {
+      "enum": [
+        "BOOT", "HOMING", "DISARMED", "SCANNING", "CANDIDATE", "SLEW", "CONFIRM",
+        "TRACK", "DETER", "COOLDOWN", "ZONE_SETUP", "SAFE_ERROR"
+      ]
+    },
+    "injectableStateName": {
+      "description": "DETER means the effector is on, so a starting situation cannot name it.",
+      "enum": [
+        "BOOT", "HOMING", "DISARMED", "SCANNING", "CANDIDATE", "SLEW", "CONFIRM",
+        "TRACK", "COOLDOWN", "ZONE_SETUP", "SAFE_ERROR"
+      ]
+    },
+    "faultName": { "enum": ["HEARTBEAT_LOST", "HOMING_FAILED", "INTERNAL", "KEY_OFF"] },
+    "faultMask": {
+      "description": "A list of fault names (exactly those bits) or a raw bit mask.",
+      "oneOf": [
+        { "type": "integer", "minimum": 0, "maximum": 65535 },
+        { "type": "array", "items": { "$ref": "#/$defs/faultName" }, "uniqueItems": true }
+      ]
+    },
+    "point": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": -32768, "maximum": 32767 },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "config": {
+      "description": "Overrides of the named timing and limit values (protocol section 8).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "heartbeat_interval_ms": { "type": "integer", "minimum": 1 },
+        "watchdog_ms": { "type": "integer", "minimum": 1 },
+        "person_clear_holdoff_ms": { "$ref": "#/$defs/uint" },
+        "person_reengage_delay_ms": { "$ref": "#/$defs/uint" },
+        "fire_ttl_ms": { "type": "integer", "minimum": 1, "maximum": 5000 },
+        "command_ttl_ms": { "type": "integer", "minimum": 1 },
+        "per_shot_ms": { "type": "integer", "minimum": 500 },
+        "cooldown_ms": { "$ref": "#/$defs/uint" },
+        "zone_upload_timeout_ms": { "type": "integer", "minimum": 1 },
+        "homing_duration_ms": { "$ref": "#/$defs/uint" },
+        "aiming_error_cdeg": { "$ref": "#/$defs/uint" },
+        "max_zones": { "type": "integer", "minimum": 1, "maximum": 9 },
+        "max_points_per_zone": { "type": "integer", "minimum": 3 },
+        "elevation_min_cdeg": { "$ref": "#/$defs/uint" },
+        "elevation_max_cdeg": { "type": "integer", "minimum": 0, "maximum": 8000 }
+      }
+    },
+    "initialFields": {
+      "description": "Starting conditions. There is deliberately no effector field and no DETER state: a starting situation can never switch the effector on.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": { "$ref": "#/$defs/injectableStateName" },
+        "homed": { "type": "boolean" },
+        "armed": { "type": "boolean" },
+        "key_on": { "type": "boolean" },
+        "pan_cdeg": { "type": "integer", "minimum": 0, "maximum": 24000 },
+        "tilt_cdeg": { "type": "integer", "minimum": 0, "maximum": 8000 },
+        "heartbeat_age_ms": { "$ref": "#/$defs/uint" },
+        "no_heartbeat": { "type": "boolean" },
+        "person_clear": { "type": "boolean" },
+        "person_clear_age_ms": { "$ref": "#/$defs/uint" },
+        "clear_streak_ms": { "$ref": "#/$defs/uint" },
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["zone_id", "points"],
+            "additionalProperties": false,
+            "properties": {
+              "zone_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "points": { "type": "array", "items": { "$ref": "#/$defs/point" } }
+            }
+          }
+        },
+        "zone_store_corrupt": { "type": "boolean" },
+        "zone_storage_unreadable": { "type": "boolean" },
+        "zone_storage_mode": {
+          "description": "Make persistent storage refuse writes: ok, full or locked.",
+          "enum": ["ok", "full", "locked"]
+        },
+        "cooldown_remaining_ms": { "$ref": "#/$defs/uint" },
+        "fault_mask": { "$ref": "#/$defs/faultMask" },
+        "last_seq": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      }
+    },
+    "message": {
+      "description": "A host message written as readable fields. The runner encodes it with the reference encoder. seq is optional: the runner numbers messages itself unless a vector needs a specific number.",
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "HOME", "MOVE", "JOG", "HEARTBEAT", "ARM", "DISARM", "ZONE_BEGIN", "ZONE_POINT",
+            "ZONE_COMMIT", "ZONE_DELETE", "ZONE_LIST", "ZONE_CLEAR", "FIRE_REQUEST",
+            "FIRE_STOP", "STATUS_REQUEST"
+          ]
+        },
+        "seq": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "fields": { "type": "object" }
+      }
+    },
+    "expectReply": {
+      "oneOf": [
+        { "const": "none" },
+        {
+          "type": "object",
+          "required": ["result"],
+          "additionalProperties": false,
+          "properties": {
+            "result": { "enum": ["OK", "REJECTED", "GRANTED", "DENIED"] },
+            "code": { "$ref": "#/$defs/name" },
+            "data": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "eventExpectation": {
+      "type": "object",
+      "required": ["event"],
+      "additionalProperties": false,
+      "properties": {
+        "event": { "enum": ["on", "normal_end", "cut", "stopped_by_host"] },
+        "cause": { "$ref": "#/$defs/name" },
+        "at_ms": { "$ref": "#/$defs/uint" },
+        "within_ms": { "$ref": "#/$defs/uint" }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": { "$ref": "#/$defs/stateName" },
+        "pan_cdeg": { "type": "integer" },
+        "tilt_cdeg": { "type": "integer" },
+        "armed": { "type": "boolean" },
+        "homed": { "type": "boolean" },
+        "key_on": { "type": "boolean" },
+        "effector_on": { "type": "boolean" },
+        "zones": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+        "zone_store_valid": { "type": "boolean" },
+        "fault_mask": { "$ref": "#/$defs/faultMask" },
+        "fault_mask_lacks": {
+          "description": "These fault bits must be clear (other bits are not checked).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/faultName" }
+        },
+        "events": {
+          "description": "The complete ordered list of EFFECTOR_EVENTs sent so far in this vector.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/eventExpectation" }
+        },
+        "counters": {
+          "description": "Device counters, for example interlock.KEY_OFF or rejected.BAD_CRC. Only a device that can report counters is checked.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/uint" }
+        }
+      }
+    },
+    "heartbeatSchedule": {
+      "description": "Heartbeats the runner sends from from_ms to until_ms (both included) every every_ms (default: heartbeat_interval_ms). At an instant where a step also happens, the heartbeat goes first.",
+      "type": "object",
+      "required": ["from_ms", "until_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "from_ms": { "$ref": "#/$defs/uint" },
+        "until_ms": { "$ref": "#/$defs/uint" },
+        "every_ms": { "type": "integer", "minimum": 1 },
+        "person_clear": { "type": "boolean" }
+      }
+    },
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["at_ms", "action", "message"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "send" },
+            "message": { "$ref": "#/$defs/message" },
+            "expect_reply": { "$ref": "#/$defs/expectReply" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["at_ms", "action", "hex"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "send_raw" },
+            "hex": { "type": "string", "pattern": "^([0-9A-Fa-f]{2}[ ]?)+$" },
+            "expect_reply": { "$ref": "#/$defs/expectReply" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["at_ms", "action", "on"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "set_key" },
+            "on": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["at_ms", "action", "fields"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "inject" },
+            "fields": { "$ref": "#/$defs/initialFields" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["at_ms", "action"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "advance" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["at_ms", "action", "expect"],
+          "additionalProperties": false,
+          "properties": {
+            "at_ms": { "$ref": "#/$defs/uint" },
+            "action": { "const": "expect" },
+            "expect": { "$ref": "#/$defs/expectation" }
+          }
+        }
+      ]
+    },
+    "vector": {
+      "type": "object",
+      "required": ["id", "description", "covers", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+        "description": { "type": "string", "minLength": 1 },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z_]+:[A-Za-z0-9_.]+$" }
+        },
+        "config": { "$ref": "#/$defs/config" },
+        "initial": { "$ref": "#/$defs/initialFields" },
+        "heartbeats": { "type": "array", "items": { "$ref": "#/$defs/heartbeatSchedule" } },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } },
+        "expect": { "$ref": "#/$defs/expectation" }
+      }
+    }
+  }
+}

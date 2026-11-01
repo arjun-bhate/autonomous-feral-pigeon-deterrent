@@ -232,7 +232,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-038, FR-042, SC-018, FR-040
   - **Depends**: T007, T009, T003
 
-- [ ] T031 [P] [US7] Create `protocol/vector-schema.json` (JSON Schema for contracts/scenario-vectors.md sections 1 and 2: `id`, `description`, `covers`, `config`, `initial`, `steps` with actions `send`, `send_raw`, `set_key`, `inject`, `advance`, `expect`, and `protocol_version`) and an empty-but-valid skeleton of each file in `protocol/vectors/`.
+- [X] T031 [P] [US7] Create `protocol/vector-schema.json` (JSON Schema for contracts/scenario-vectors.md sections 1 and 2: `id`, `description`, `covers`, `config`, `initial`, `steps` with actions `send`, `send_raw`, `set_key`, `inject`, `advance`, `expect`, and `protocol_version`) and an empty-but-valid skeleton of each file in `protocol/vectors/`.
   - **Tests first**: `tests/contract/test_vector_schema.py`: the schema itself is valid; the contract's illustrative example validates; vectors missing `id`, with a reason number instead of a name, or with an unknown action are rejected; ids are unique across files; every file records `protocol_version`.
   - **Covers**: FR-039, FR-042
   - **Depends**: T001

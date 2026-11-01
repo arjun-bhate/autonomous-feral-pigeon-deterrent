@@ -257,7 +257,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-041, FR-039, FR-022, FR-023, FR-025, SC-008, SC-009, SC-017
   - **Depends**: T034, T025b
 
-- [ ] T036 [US7] Add priority vectors and the retired-code vector to `fire_arbitration.json`: rung pairs `priority:rung7_over_rung8`, `rung8_over_rung9`, `rung5_over_rung14`, `rung8_over_rung14`, `rung13_over_rung14`, and `rate.no_per_minute_limit` (three 5000 ms requests at 0, 10 s, 20 s are all granted and no reply carries code 13).
+- [X] T036 [US7] Add priority vectors and the retired-code vector to `fire_arbitration.json`: rung pairs `priority:rung7_over_rung8`, `rung8_over_rung9`, `rung5_over_rung14`, `rung8_over_rung14`, `rung13_over_rung14`, and `rate.no_per_minute_limit` (three 5000 ms requests at 0, 10 s, 20 s are all granted and no reply carries code 13).
   - **Tests first**: `tests/contract/test_vectors.py`; priority vectors must fail two or more conditions on purpose (asserted by the mutation test).
   - **Covers**: FR-023, FR-041, FR-048, FR-049, SC-017, SC-008
   - **Depends**: T035

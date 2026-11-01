@@ -18,6 +18,8 @@ import pytest
 from simulator_adapter import SimulatorAdapter
 from vector_runner import format_failure, load_reasons, load_vector_files, run_vector
 
+from deterrent.protocol.codes import DENIAL_LADDER
+
 GRANT_ID = "fire.grant.all_conditions_hold"
 _ZONE = {"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}
 _HEAD_AWAY_FROM_ZONE = {"pan_cdeg": 5000, "tilt_cdeg": 3000}
@@ -84,7 +86,7 @@ MUTATIONS = {
     "KEY_OFF": ("fire.deny.key_off", _initial(key_on=False)),
     "NOT_ARMED": ("fire.deny.not_armed", _initial(armed=False)),
     "PERSON_NOT_CLEAR": ("fire.deny.person_reported", _initial(person_clear=False)),
-    "PERSON_CLEAR_DELAY": ("fire.deny.person_clear_delay", _initial(clear_streak_ms=4999)),
+    "PERSON_CLEAR_DELAY": ("fire.deny.person_clear_delay", _initial(clear_streak_ms=0)),
     "REQUEST_EXPIRED": ("fire.deny.request_expired", _request_arrives_late),
     "ZONE_STORE_INVALID": ("fire.deny.zone_store_invalid", _initial(zone_store_corrupt=True)),
     "ELEVATION_LIMIT": ("fire.deny.elevation_limit", _initial(tilt_cdeg=6000)),
@@ -194,3 +196,71 @@ def test_each_mutation_changes_something_and_the_mutations_do_not_overlap():
         assert changed != base, reason
         assert changed not in seen, reason
         seen.append(changed)
+
+
+# ---- priority vectors (T036): two or more conditions fail on purpose --------
+
+# (vector id, the reason that must be reported, the reason with the higher priority number)
+PRIORITY_CASES = [
+    ("fire.priority.person_not_clear_over_delay", "PERSON_NOT_CLEAR", "PERSON_CLEAR_DELAY"),
+    ("fire.priority.delay_over_expired", "PERSON_CLEAR_DELAY", "REQUEST_EXPIRED"),
+    ("fire.priority.key_over_cooldown", "KEY_OFF", "COOLDOWN_ACTIVE"),
+    ("fire.priority.delay_over_cooldown", "PERSON_CLEAR_DELAY", "COOLDOWN_ACTIVE"),
+    ("fire.priority.on_time_over_cooldown", "ON_TIME_LIMIT", "COOLDOWN_ACTIVE"),
+]
+
+
+def priority_of(reason: str) -> int:
+    return next(r.priority for r in DENIAL_LADDER if r.name == reason)
+
+
+def _expected_denial(vector: dict, reason: str) -> dict:
+    vector["steps"][0]["expect_reply"] = {"result": "DENIED", "code": reason}
+    vector["expect"] = {"effector_on": False, "events": []}
+    return vector
+
+
+@pytest.mark.parametrize(("vector_id", "winner", "loser"), PRIORITY_CASES)
+def test_a_priority_vector_is_two_failing_conditions_and_the_lower_number_wins(
+    vector_id, winner, loser
+):
+    assert priority_of(winner) < priority_of(loser)
+    vector = _vectors()[vector_id]
+    assert _strip(vector) == _strip(mutated(winner, loser))
+    # Each condition really fails here: on its own, in the same situation, it is reported.
+    for reason in (winner, loser):
+        alone = _expected_denial(mutated(reason), reason)
+        result = _run(alone)
+        assert result.passed, format_failure(result)
+    # Together the reason with the lower priority number is reported (the vector says so).
+    assert vector["steps"][0]["expect_reply"] == {"result": "DENIED", "code": winner}
+    result = _run(vector)
+    assert result.passed, format_failure(result)
+
+
+@pytest.mark.parametrize(("vector_id", "winner", "loser"), PRIORITY_CASES)
+def test_a_priority_vector_names_its_rungs(vector_id, winner, loser):
+    tag = f"priority:rung{priority_of(winner)}_over_rung{priority_of(loser)}"
+    assert tag in _vectors()[vector_id]["covers"]
+
+
+def test_the_five_documented_rung_pairs_are_all_present():
+    tags = {tag for v in _vectors().values() for tag in v["covers"] if tag.startswith("priority:")}
+    assert {
+        "priority:rung7_over_rung8",
+        "priority:rung8_over_rung9",
+        "priority:rung5_over_rung14",
+        "priority:rung8_over_rung14",
+        "priority:rung13_over_rung14",
+    } <= tags
+
+
+def test_the_retired_reason_is_never_returned_and_there_is_no_per_minute_limit():
+    vector = _vectors()["rate.no_per_minute_limit"]
+    assert "retired:RATE_LIMIT" in vector["covers"]
+    sends = [s for s in vector["steps"] if s["action"] == "send" and "expect_reply" in s]
+    assert [s["at_ms"] for s in sends] == [0, 10000, 20000]
+    assert all(s["message"]["fields"]["duration_ms"] == 5000 for s in sends)
+    assert all(s["expect_reply"] == {"result": "GRANTED"} for s in sends)
+    result = _run(vector)
+    assert result.passed, format_failure(result)

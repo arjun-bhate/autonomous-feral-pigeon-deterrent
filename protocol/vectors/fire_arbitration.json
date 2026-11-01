@@ -91,10 +91,10 @@
     },
     {
       "id": "fire.deny.person_clear_delay",
-      "description": "No person now, but the clear period is 1 ms short of the re-engage delay.",
+      "description": "No person now, but the clear period has only just started, so the re-engage delay has not elapsed.",
       "covers": ["deny:PERSON_CLEAR_DELAY", "codes:DIFFERS_FROM_PRIORITY"],
       "config": {"elevation_max_cdeg": 4000},
-      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 4999},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 0},
       "steps": [
         {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}}
       ],
@@ -165,6 +165,76 @@
         {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}}
       ],
       "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.priority.person_not_clear_over_delay",
+      "description": "A person is reported and the re-engage delay has not elapsed: the person is reported (rung 7 over rung 8).",
+      "covers": ["priority:rung7_over_rung8"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false, "clear_streak_ms": 0},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_NOT_CLEAR"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "events": [], "fault_mask": []}
+    },
+    {
+      "id": "fire.priority.delay_over_expired",
+      "description": "The re-engage delay has not elapsed and the request has expired: the delay is reported (rung 8 over rung 9).",
+      "covers": ["priority:rung8_over_rung9"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 0},
+      "steps": [
+        {"at_ms": 501, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "events": [], "fault_mask": []}
+    },
+    {
+      "id": "fire.priority.key_over_cooldown",
+      "description": "A cooldown is running and the key is off: KEY_OFF is reported, the cooldown is last (rung 5 over rung 14).",
+      "covers": ["priority:rung5_over_rung14"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": false, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 2000},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "KEY_OFF"}}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "events": [], "fault_mask": []}
+    },
+    {
+      "id": "fire.priority.delay_over_cooldown",
+      "description": "The re-engage delay has not elapsed and a cooldown is running: the delay is reported (rung 8 over rung 14).",
+      "covers": ["priority:rung8_over_rung14"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 0, "cooldown_remaining_ms": 2000},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "events": [], "fault_mask": []}
+    },
+    {
+      "id": "fire.priority.on_time_over_cooldown",
+      "description": "A cooldown is running and the shot is too long: ON_TIME_LIMIT is reported (rung 13 over rung 14).",
+      "covers": ["priority:rung13_over_rung14"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 2000},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 5001}}, "expect_reply": {"result": "DENIED", "code": "ON_TIME_LIMIT"}}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "events": [], "fault_mask": []}
+    },
+    {
+      "id": "rate.no_per_minute_limit",
+      "description": "Three 5000 ms requests at 0, 10 s and 20 s are all granted (15 s of on-time in 25 s); no reply carries code 13.",
+      "covers": ["retired:RATE_LIMIT"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 25000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 10000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 10000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 20000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 20000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 25000, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 5000}, {"event": "on", "at_ms": 10000}, {"event": "normal_end", "at_ms": 15000}, {"event": "on", "at_ms": 20000}, {"event": "normal_end", "at_ms": 25000}], "counters": {"fire_granted": 3, "rejected.total": 0}}
     }
   ]
 }

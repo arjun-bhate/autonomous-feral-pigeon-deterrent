@@ -8,13 +8,17 @@ from dataclasses import dataclass
 
 from deterrent.clock import FakeClock
 from deterrent.config import Settings, load_settings
-from deterrent.protocol.codes import MsgType, State
+from deterrent.protocol.codes import MsgType, Result, State
+from deterrent.protocol.crc import zone_crc32
 from deterrent.protocol.framing import Frame, build_frame, parse_frame
 from deterrent.protocol.messages import (
     DeviceMessage,
     Heartbeat,
     HostMessage,
     Reply,
+    ZoneBegin,
+    ZoneCommit,
+    ZonePoint,
     decode_device_message,
     host_frame,
 )
@@ -78,6 +82,13 @@ class Harness:
         self.device.fault_mask = 1 if state is State.SAFE_ERROR else 0
         if state is State.COOLDOWN:
             self.device._cooldown_started_ms = self.clock.now_ms()
+
+    def store_zone(self, zone_id: int, points: list[tuple[int, int]]) -> None:
+        """Upload and commit a zone through the normal messages (device must be DISARMED)."""
+        assert self.reply(ZoneBegin(zone_id, len(points))).result is Result.OK
+        for index, (pan, tilt) in enumerate(points):
+            assert self.reply(ZonePoint(index, pan, tilt)).result is Result.OK
+        assert self.reply(ZoneCommit(zone_crc32(zone_id, points))).result is Result.OK
 
     # ---- sending ---------------------------------------------------------------------------
 

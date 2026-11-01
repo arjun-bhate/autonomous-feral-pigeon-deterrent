@@ -61,7 +61,7 @@ from deterrent.protocol.messages import (
     pack_heartbeat_data,
     pack_zone_list,
 )
-from deterrent.simulator.arbitration import FireSnapshot, decide_fire
+from deterrent.simulator.arbitration import FireSnapshot, decide_fire, lapsed_interlock
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.person import PersonCheck, PersonSnapshot, PersonTimers, evaluate_person
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
@@ -243,6 +243,7 @@ class Device:
         if self.state is State.HOMING:
             if elapsed_ms(now, self._homing_started_ms) >= self.settings.homing_duration_ms:
                 self._finish_homing()
+        self._check_interlocks()
         self._check_shot_end(now)
         self._check_cooldown_expiry()
         self._send_status_if_due()
@@ -431,6 +432,8 @@ class Device:
         """Always accepted. In BOOT, HOMING and SAFE_ERROR it changes nothing else."""
         self.zones.discard()
         if self.state not in (State.BOOT, State.HOMING, State.SAFE_ERROR):
+            if self.effector_on:  # DISARM cuts a running shot and starts the cooldown
+                self._cut_and_start_cooldown(DenyReason.NOT_ARMED)
             self.armed = False
             self._set_state(State.DISARMED)
         return Reply.ok(MsgType.DISARM)
@@ -576,6 +579,38 @@ class Device:
         self.effector_on = False
         self._sink.effector_cut(now, int(cause))
         self._send_event(EffectorEventMessage(EffectorEvent.CUT, int(cause)))
+
+    def _check_interlocks(self) -> None:
+        """While the effector is on, re-check every safety condition that can lapse.
+
+        Runs on every tick and after every message. The first lapsed condition cuts the
+        effector at once. What follows depends on the cause: heartbeat loss and key off
+        go to SAFE_ERROR (no cooldown); DISARM goes to DISARMED; every other cause ends
+        the shot, starts the cooldown and leaves the device armed with no fault latched.
+        """
+        if not self.effector_on:
+            return
+        reason = lapsed_interlock(self._fire_snapshot())
+        if reason is None:
+            return
+        if reason is DenyReason.HEARTBEAT_LOST:
+            self._enter_safe_error(Fault.HEARTBEAT_LOST, reason)
+        elif reason is DenyReason.KEY_OFF:
+            self._enter_safe_error(Fault.KEY_OFF, reason)
+        else:
+            self._cut_and_start_cooldown(reason)
+            if reason is DenyReason.NOT_ARMED:
+                self.armed = False
+                self._set_state(State.DISARMED)
+            else:
+                self._set_state(State.COOLDOWN)
+
+    def _cut_and_start_cooldown(self, reason: DenyReason) -> None:
+        """Count the lapse, cut the effector and start the cooldown (the shot has ended)."""
+        now = self.now_ms()
+        self._sink.interlock_event(now, reason)
+        self._cut_effector(reason)
+        self._cooldown_started_ms = now
 
     def _check_shot_end(self, now: int) -> None:
         """A shot ends by itself when its maximum duration is reached; the cooldown starts."""

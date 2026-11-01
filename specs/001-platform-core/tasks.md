@@ -292,7 +292,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-041, FR-040, SC-017, SC-008
   - **Depends**: T041, T033
 
-- [ ] T043 [US7] Create `tests/contract/independent_encoder.py` written only from `protocol/PROTOCOL.md` (separate COBS, CRC and layouts, not importing `deterrent.protocol`) and `tests/contract/test_hand_built_messages.py` that builds the messages of five named vectors (one denial, one zone upload, one duplicate, one fire stop, one corrupted frame) and compares the bytes and the predicted replies with the reference encoder and the simulator.
+- [X] T043 [US7] Create `tests/contract/independent_encoder.py` written only from `protocol/PROTOCOL.md` (separate COBS, CRC and layouts, not importing `deterrent.protocol`) and `tests/contract/test_hand_built_messages.py` that builds the messages of five named vectors (one denial, one zone upload, one duplicate, one fire stop, one corrupted frame) and compares the bytes and the predicted replies with the reference encoder and the simulator.
   - **Tests first**: the test file is the deliverable; it must fail if `PROTOCOL.md` and the reference encoder disagree on any byte.
   - **Covers**: SC-018, FR-042, FR-038
   - **Depends**: T042

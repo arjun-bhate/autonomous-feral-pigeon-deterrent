@@ -1,4 +1,642 @@
 {
   "protocol_version": "0.1",
-  "vectors": []
+  "vectors": [
+    {
+      "id": "zone.setup.in.begin_accepted",
+      "description": "One zone is stored. ZONE_BEGIN from DISARMED (homed) enters ZONE_SETUP; a fire request is now denied ZONE_SETUP; the stored zones are unchanged.",
+      "covers": ["setup:IN", "deny:ZONE_SETUP"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 9, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ZONE_SETUP"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}}
+      ],
+      "expect": {"state": "ZONE_SETUP", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit1.commit_ok",
+      "description": "BEGIN, all points and a correct CRC-32: the zone is listed with its CRC, the state is DISARMED and the upload is gone.",
+      "covers": ["setup:EXIT_1"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [2]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]}}},
+        {"at_ms": 80, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [2]}
+    },
+    {
+      "id": "zone.setup.exit2.commit_bad_checksum",
+      "description": "A wrong CRC-32 is rejected ZONE_BAD_CHECKSUM: the store is unchanged, the state is DISARMED and the upload is gone.",
+      "covers": ["setup:EXIT_2", "zone:ZONE_BAD_CHECKSUM"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32": 1369096057}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_BAD_CHECKSUM"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}},
+        {"at_ms": 80, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit2.commit_self_crossing",
+      "description": "A polygon whose edges cross (and whose area is not zero) is rejected ZONE_SELF_CROSSING: the store is unchanged and the state is DISARMED.",
+      "covers": ["setup:EXIT_2", "zone:ZONE_SELF_CROSSING"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 1000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[0, 0], [4000, 3000], [4000, 0], [1000, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_SELF_CROSSING"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit2.commit_incomplete",
+      "description": "A commit with one declared point missing is rejected ZONE_INCOMPLETE: the store is unchanged and the state is DISARMED.",
+      "covers": ["setup:EXIT_2", "zone:ZONE_INCOMPLETE"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_INCOMPLETE"}},
+        {"at_ms": 50, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit2.commit_storage_error",
+      "description": "Storage is full: the commit is rejected ZONE_STORAGE_ERROR, nothing is stored (not even half a zone) and the state is DISARMED. After storage recovers the same upload succeeds.",
+      "covers": ["setup:EXIT_2", "zone:ZONE_STORAGE_ERROR"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}], "zone_storage_mode": "full"},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_STORAGE_ERROR"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}},
+        {"at_ms": 200, "action": "inject", "fields": {"zone_storage_mode": "ok"}},
+        {"at_ms": 250, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 260, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 270, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 280, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 290, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 320, "action": "expect", "expect": {"zones": [1, 2]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1, 2]}
+    },
+    {
+      "id": "zone.commit.storage_locked",
+      "description": "Storage is locked: the commit is rejected ZONE_STORAGE_ERROR and the store is unchanged.",
+      "covers": ["zone:ZONE_STORAGE_ERROR", "setup:EXIT_2"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}], "zone_storage_mode": "locked"},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_STORAGE_ERROR"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit3.idle_timeout",
+      "description": "Two points, then silence past zone_upload_timeout_ms (1000, shortened): still ZONE_SETUP just before the timeout; later DISARMED with the store unchanged; the next ZONE_POINT is rejected ZONE_NO_UPLOAD.",
+      "covers": ["setup:EXIT_3", "timing:zone_upload_timeout_ms", "zone:ZONE_NO_UPLOAD"],
+      "config": {"zone_upload_timeout_ms": 1000},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1300, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1099, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 1200, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 1300, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit4.disarm_aborts",
+      "description": "Two points, then DISARM: reply OK, state DISARMED, store unchanged, the upload is gone (the next point and commit are rejected ZONE_NO_UPLOAD).",
+      "covers": ["setup:EXIT_4", "zone:ZONE_NO_UPLOAD"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "DISARMED", "armed": false, "zones": [1]}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit5.key_off",
+      "description": "Two points, then the key is turned off: SAFE_ERROR with fault KEY_OFF, armed false, the upload is gone and the store is unchanged.",
+      "covers": ["setup:EXIT_5", "key:ANY_STATE", "zone:ZONE_NO_UPLOAD"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "set_key", "on": false},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false, "zones": [1]}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit6.heartbeat_lost",
+      "description": "Two points, then no heartbeat past watchdog_ms: SAFE_ERROR with fault HEARTBEAT_LOST, the upload is gone and the store is unchanged.",
+      "covers": ["setup:EXIT_6", "timing:watchdog_ms", "zone:ZONE_NO_UPLOAD"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false, "zones": [1]}},
+        {"at_ms": 1100, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "zones": [1]}
+    },
+    {
+      "id": "zone.setup.exit7.begin_replaces",
+      "description": "BEGIN id 5 with two points, then BEGIN id 6: the state stays ZONE_SETUP and a commit for id 6 succeeds. The points of id 5 never appear and no mixed zone is stored.",
+      "covers": ["setup:EXIT_7"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 6, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 6, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 80, "action": "expect", "expect": {"state": "DISARMED", "zones": [6]}},
+        {"at_ms": 90, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 6, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [6]}
+    },
+    {
+      "id": "zone.setup.exit8.begin_rejected_from_disarmed",
+      "description": "ZONE_BEGIN with 2 points from DISARMED is rejected ZONE_TOO_FEW_POINTS and the state stays DISARMED (ZONE_SETUP is not entered).",
+      "covers": ["setup:EXIT_8", "zone:ZONE_TOO_FEW_POINTS"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 2}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_TOO_FEW_POINTS"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "DISARMED"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED"}
+    },
+    {
+      "id": "zone.setup.exit8.begin_rejected_inside_setup",
+      "description": "An upload is in progress; a BEGIN with 2 points is rejected ZONE_TOO_FEW_POINTS. The state stays ZONE_SETUP and the earlier upload continues and its commit succeeds.",
+      "covers": ["setup:EXIT_8", "zone:ZONE_TOO_FEW_POINTS"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 6, "point_count": 2}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_TOO_FEW_POINTS"}},
+        {"at_ms": 20, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 700, "tilt_cdeg": 900}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 5, "points": [[500, 500], [900, 500], [700, 900]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [5]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [5]}
+    },
+    {
+      "id": "zone.setup.exit8.begin_store_full_inside_setup",
+      "description": "An upload is in progress and the store fills up (max_zones 2): a BEGIN is rejected ZONE_STORE_FULL and the state stays ZONE_SETUP. When room is made again the earlier upload's commit succeeds.",
+      "covers": ["setup:EXIT_8", "zone:ZONE_STORE_FULL"],
+      "config": {"max_zones": 2},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "inject", "fields": {"zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}, {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 9, "point_count": 3}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_STORE_FULL"}},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 40, "action": "inject", "fields": {"zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 700, "tilt_cdeg": 900}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 5, "points": [[500, 500], [900, 500], [700, 900]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 80, "action": "expect", "expect": {"state": "DISARMED", "zones": [1, 5]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1, 5]}
+    },
+    {
+      "id": "zone.setup.nonexit.other_messages",
+      "description": "In ZONE_SETUP: ARM and HOME are rejected WRONG_STATE, a fire request is denied ZONE_SETUP, ZONE_LIST and MOVE work, and a point with a bad index is rejected ZONE_BAD_INDEX. The state and the upload are unchanged: the upload still commits.",
+      "covers": ["setup:NONEXIT", "deny:ZONE_SETUP", "zone:ZONE_BAD_INDEX"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "WRONG_STATE"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "HOME", "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "WRONG_STATE"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ZONE_SETUP"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}},
+        {"at_ms": 60, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 700, "tilt_cdeg": 300}}, "expect_reply": {"result": "OK", "data": {"pan": 700, "tilt": 300}}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_BAD_INDEX"}},
+        {"at_ms": 80, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 90, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 110, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 120, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 130, "action": "expect", "expect": {"state": "DISARMED", "zones": [1, 2]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1, 2], "pan_cdeg": 700}
+    },
+    {
+      "id": "zone.setup.nonexit.delete_and_clear",
+      "description": "In ZONE_SETUP, ZONE_DELETE (known id, then unknown id) and ZONE_CLEAR work on the stored zones and change neither the state nor the upload, which still commits.",
+      "covers": ["setup:NONEXIT", "zone:ZONE_UNKNOWN_ID"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}, {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_DELETE", "fields": {"zone_id": 1}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "expect", "expect": {"state": "ZONE_SETUP", "zones": [2]}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_DELETE", "fields": {"zone_id": 99}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_UNKNOWN_ID"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_CLEAR", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "expect", "expect": {"state": "ZONE_SETUP", "zones": []}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 700, "tilt_cdeg": 900}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 5, "points": [[500, 500], [900, 500], [700, 900]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 80, "action": "expect", "expect": {"state": "DISARMED", "zones": [5]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [5]}
+    },
+    {
+      "id": "zone.setup.begin_rejected_when_armed",
+      "description": "ZONE_BEGIN while armed (SCANNING) is rejected WRONG_STATE and the state is unchanged.",
+      "covers": ["setup:IN"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "REJECTED", "code": "WRONG_STATE"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "SCANNING", "armed": true}}
+      ],
+      "expect": {"state": "SCANNING", "armed": true}
+    },
+    {
+      "id": "zone.setup.idle_timer_only_upload_messages",
+      "description": "zone_upload_timeout_ms 5000, heartbeats every 200 ms. BEGIN at 0, a point at 3000, then STATUS_REQUEST, ZONE_LIST, MOVE and a stale-sequence message every 1000 ms from 4000 to 7000: none of them resets the idle timer, so the state is still ZONE_SETUP at 7900 (the point at 3000 reset it) and DISARMED at 8100.",
+      "covers": ["timing:zone_upload_timeout_ms", "setup:EXIT_3", "setup:NONEXIT"],
+      "config": {"zone_upload_timeout_ms": 5000},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 8200, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 3000, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 4000, "action": "send", "message": {"type": "STATUS_REQUEST", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 4000, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}},
+        {"at_ms": 4000, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 100, "tilt_cdeg": 100}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 4000, "action": "send", "message": {"type": "STATUS_REQUEST", "seq": 3, "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "STATUS_REQUEST", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 100, "tilt_cdeg": 100}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "STATUS_REQUEST", "seq": 3, "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 6000, "action": "send", "message": {"type": "STATUS_REQUEST", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 6000, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}},
+        {"at_ms": 6000, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 100, "tilt_cdeg": 100}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 6000, "action": "send", "message": {"type": "STATUS_REQUEST", "seq": 3, "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 7000, "action": "send", "message": {"type": "STATUS_REQUEST", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 7000, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}},
+        {"at_ms": 7000, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 100, "tilt_cdeg": 100}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 7000, "action": "send", "message": {"type": "STATUS_REQUEST", "seq": 3, "fields": {}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 7900, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 8100, "action": "expect", "expect": {"state": "DISARMED"}},
+        {"at_ms": 8200, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": []}
+    },
+    {
+      "id": "zone.upload.point_and_commit_without_upload",
+      "description": "A ZONE_POINT or ZONE_COMMIT with no upload in progress is rejected ZONE_NO_UPLOAD.",
+      "covers": ["zone:ZONE_NO_UPLOAD"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32": 0}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_NO_UPLOAD"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": []}
+    },
+    {
+      "id": "zone.upload.bad_index_keeps_upload",
+      "description": "A point that is not the next expected index (skipping ahead, or repeating one) is rejected ZONE_BAD_INDEX and the upload is kept: the right points can still follow and the commit succeeds.",
+      "covers": ["zone:ZONE_BAD_INDEX"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 6, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_BAD_INDEX"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_BAD_INDEX"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 6, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "OK"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [6]}
+    },
+    {
+      "id": "zone.begin.too_many_points",
+      "description": "ZONE_BEGIN with 17 points (the limit is 16) is rejected ZONE_TOO_MANY_POINTS and the state stays DISARMED.",
+      "covers": ["zone:ZONE_TOO_MANY_POINTS", "setup:EXIT_8"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 17}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_TOO_MANY_POINTS"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "DISARMED"}}
+      ],
+      "expect": {"state": "DISARMED"}
+    },
+    {
+      "id": "zone.upload.sixteen_points_accepted",
+      "description": "A zone with exactly 16 points (max_points_per_zone) is accepted and stored.",
+      "covers": ["zone:LIMIT_POINTS"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 7, "point_count": 16}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 10000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 9848, "tilt_cdeg": 3383}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 9414, "tilt_cdeg": 3707}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 8765, "tilt_cdeg": 3924}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 4, "pan_cdeg": 8000, "tilt_cdeg": 4000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 5, "pan_cdeg": 7235, "tilt_cdeg": 3924}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 6, "pan_cdeg": 6586, "tilt_cdeg": 3707}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 80, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 7, "pan_cdeg": 6152, "tilt_cdeg": 3383}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 90, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 8, "pan_cdeg": 6000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 9, "pan_cdeg": 6152, "tilt_cdeg": 2617}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 110, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 10, "pan_cdeg": 6586, "tilt_cdeg": 2293}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 120, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 11, "pan_cdeg": 7235, "tilt_cdeg": 2076}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 130, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 12, "pan_cdeg": 8000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 140, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 13, "pan_cdeg": 8765, "tilt_cdeg": 2076}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 150, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 14, "pan_cdeg": 9414, "tilt_cdeg": 2293}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 160, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 15, "pan_cdeg": 9848, "tilt_cdeg": 2617}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 170, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 7, "points": [[10000, 3000], [9848, 3383], [9414, 3707], [8765, 3924], [8000, 4000], [7235, 3924], [6586, 3707], [6152, 3383], [6000, 3000], [6152, 2617], [6586, 2293], [7235, 2076], [8000, 2000], [8765, 2076], [9414, 2293], [9848, 2617]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 200, "action": "expect", "expect": {"zones": [7], "state": "DISARMED"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [7]}
+    },
+    {
+      "id": "zone.begin.store_full",
+      "description": "Eight zones are stored (max_zones 8): ZONE_BEGIN is rejected ZONE_STORE_FULL, the state stays DISARMED, and ZONE_LIST still reports all eight.",
+      "covers": ["zone:ZONE_STORE_FULL", "setup:EXIT_8"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[100, 100], [150, 100], [125, 200]]}, {"zone_id": 2, "points": [[200, 100], [250, 100], [225, 200]]}, {"zone_id": 3, "points": [[300, 100], [350, 100], [325, 200]]}, {"zone_id": 4, "points": [[400, 100], [450, 100], [425, 200]]}, {"zone_id": 5, "points": [[500, 100], [550, 100], [525, 200]]}, {"zone_id": 6, "points": [[600, 100], [650, 100], [625, 200]]}, {"zone_id": 7, "points": [[700, 100], [750, 100], [725, 200]]}, {"zone_id": 8, "points": [[800, 100], [850, 100], [825, 200]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 9, "point_count": 3}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_STORE_FULL"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "DISARMED", "zones": [1, 2, 3, 4, 5, 6, 7, 8]}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 8, "zones": [{"zone_id": 1, "points": [[100, 100], [150, 100], [125, 200]]}, {"zone_id": 2, "points": [[200, 100], [250, 100], [225, 200]]}, {"zone_id": 3, "points": [[300, 100], [350, 100], [325, 200]]}, {"zone_id": 4, "points": [[400, 100], [450, 100], [425, 200]]}, {"zone_id": 5, "points": [[500, 100], [550, 100], [525, 200]]}, {"zone_id": 6, "points": [[600, 100], [650, 100], [625, 200]]}, {"zone_id": 7, "points": [[700, 100], [750, 100], [725, 200]]}, {"zone_id": 8, "points": [[800, 100], [850, 100], [825, 200]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1, 2, 3, 4, 5, 6, 7, 8]}
+    },
+    {
+      "id": "zone.commit.duplicate_id",
+      "description": "Committing an id that is already stored is rejected ZONE_DUPLICATE_ID; the stored zone keeps its original points.",
+      "covers": ["zone:ZONE_DUPLICATE_ID", "setup:EXIT_2"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 1, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 1, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_DUPLICATE_ID"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}},
+        {"at_ms": 70, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.commit.degenerate_repeated_point",
+      "description": "Rejected ZONE_DEGENERATE: two consecutive points are the same. Nothing is stored.",
+      "covers": ["zone:ZONE_DEGENERATE", "setup:EXIT_2"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[1000, 1000], [1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_DEGENERATE"}},
+        {"at_ms": 100, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.commit.degenerate_zero_area",
+      "description": "Rejected ZONE_DEGENERATE: the three points lie on one line (zero area). Nothing is stored.",
+      "covers": ["zone:ZONE_DEGENERATE", "setup:EXIT_2"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[1000, 1000], [2000, 1000], [3000, 1000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_DEGENERATE"}},
+        {"at_ms": 100, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.commit.symmetric_bowtie_is_degenerate",
+      "description": "Rejected ZONE_DEGENERATE: a symmetric bow-tie has zero signed area, so the degenerate check, which comes first, reports it, not the crossing. Nothing is stored.",
+      "covers": ["zone:ZONE_DEGENERATE", "setup:EXIT_2"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 2000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 0, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[0, 0], [2000, 2000], [2000, 0], [0, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_DEGENERATE"}},
+        {"at_ms": 100, "action": "expect", "expect": {"state": "DISARMED", "zones": [1]}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.commit.order_incomplete_before_checksum",
+      "description": "A commit that is both incomplete and has a wrong CRC-32 is reported ZONE_INCOMPLETE (check 2 before check 3).",
+      "covers": ["commit:ORDER", "zone:ZONE_INCOMPLETE"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32": 1369096057}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_INCOMPLETE"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": []}
+    },
+    {
+      "id": "zone.commit.order_checksum_before_geometry",
+      "description": "A self-crossing polygon with a wrong CRC-32 is reported ZONE_BAD_CHECKSUM (check 3 before checks 5 and 6).",
+      "covers": ["commit:ORDER", "zone:ZONE_BAD_CHECKSUM"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 1000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32": 3077146265}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_BAD_CHECKSUM"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": []}
+    },
+    {
+      "id": "zone.commit.order_degenerate_before_duplicate_id",
+      "description": "A zero-area polygon with an id that is already stored is reported ZONE_DEGENERATE (check 5 before check 7).",
+      "covers": ["commit:ORDER", "zone:ZONE_DEGENERATE"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 1, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [3000, 1000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_DEGENERATE"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.commit.order_self_crossing_before_duplicate_id",
+      "description": "A self-crossing polygon with an id that is already stored is reported ZONE_SELF_CROSSING (check 6 before check 7).",
+      "covers": ["commit:ORDER", "zone:ZONE_SELF_CROSSING"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 1, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 0, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 1000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 1, "points": [[0, 0], [4000, 3000], [4000, 0], [1000, 2000]]}}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_SELF_CROSSING"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1]}
+    },
+    {
+      "id": "zone.delete.known_and_unknown",
+      "description": "Deleting a stored id removes only that zone; deleting an id that is not stored is rejected ZONE_UNKNOWN_ID and changes nothing.",
+      "covers": ["zone:ZONE_UNKNOWN_ID"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}, {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_DELETE", "fields": {"zone_id": 1}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "expect", "expect": {"zones": [2]}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]}}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_DELETE", "fields": {"zone_id": 99}}, "expect_reply": {"result": "REJECTED", "code": "ZONE_UNKNOWN_ID"}},
+        {"at_ms": 40, "action": "expect", "expect": {"zones": [2]}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [2]}
+    },
+    {
+      "id": "zone.list.empty_and_two_zones",
+      "description": "ZONE_LIST reports no zones, then (after two uploads) both zones with their point counts and CRC-32 values.",
+      "covers": ["zone:LIST"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 1, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 2, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 110, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 120, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 130, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 4000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 140, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 3, "pan_cdeg": 3000, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 150, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 200, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 2, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}, {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [1, 2]}
+    },
+    {
+      "id": "zone.clear.removes_all",
+      "description": "ZONE_CLEAR removes every stored zone; the list is then empty and the store is valid.",
+      "covers": ["zone:CLEAR"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}, {"zone_id": 2, "points": [[3000, 1000], [4000, 1000], [4000, 2000], [3000, 2000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_CLEAR", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "expect", "expect": {"zones": [], "zone_store_valid": true}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 0, "zones": []}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [], "zone_store_valid": true}
+    },
+    {
+      "id": "zone.partial_upload.never_used_for_decisions",
+      "description": "A partial upload covering the direction the head points in is never used to decide a shot: after DISARM discards it and the device is armed again, a request is granted.",
+      "covers": ["zone:PARTIAL_DISCARDED"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 10500, "tilt_cdeg": 2500},
+      "heartbeats": [{"from_ms": 0, "until_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 9000, "tilt_cdeg": 1500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 12000, "tilt_cdeg": 1500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 12000, "tilt_cdeg": 3500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 60, "action": "expect", "expect": {"state": "SCANNING", "zones": []}},
+        {"at_ms": 70, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "zones": [], "effector_on": true}
+    },
+    {
+      "id": "zone.upload.new_begin_discards_old_points",
+      "description": "A second BEGIN with the same id and a different point count throws the first upload's points away: the stored zone has only the new points (3, not 4).",
+      "covers": ["zone:REPLACES_PARTIAL"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 4}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 3000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 4000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 110, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 500, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 120, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 900, "tilt_cdeg": 500}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 130, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 700, "tilt_cdeg": 900}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 140, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 5, "points": [[500, 500], [900, 500], [700, 900]]}}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 300, "action": "expect", "expect": {"zones": [5]}},
+        {"at_ms": 310, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1, "zones": [{"zone_id": 5, "points": [[500, 500], [900, 500], [700, 900]]}]}}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [5]}
+    },
+    {
+      "id": "zone.store.corrupted_is_listed_and_invalid",
+      "description": "A stored zone whose bytes fail their checksum is still listed, and the store is reported invalid; this is not a fault.",
+      "covers": ["store:CORRUPT_LISTED"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}], "zone_store_corrupt": true},
+      "steps": [
+        {"at_ms": 0, "action": "expect", "expect": {"zone_store_valid": false, "zones": [1], "fault_mask": []}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_LIST", "fields": {}}, "expect_reply": {"result": "OK", "data": {"count": 1}}}
+      ],
+      "expect": {"state": "DISARMED", "zone_store_valid": false, "fault_mask": []}
+    }
+  ]
 }

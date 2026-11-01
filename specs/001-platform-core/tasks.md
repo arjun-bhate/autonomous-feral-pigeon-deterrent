@@ -272,7 +272,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-049, FR-050, FR-041, FR-048, SC-021, SC-022, SC-020, SC-017
   - **Depends**: T037, T027
 
-- [ ] T039 [US7] Write `protocol/vectors/zones.json`: every zone rejection code, atomicity (nothing stored on any rejection), partial upload discarded, a new upload replaces the old, delete (known and unknown id), list, clear, store full, storage error, corrupted store; the ZONE_SETUP table rows IN and EXIT_1 to EXIT_8 and the non-exit list (contract section 6.1), idle timer only reset by upload messages.
+- [X] T039 [US7] Write `protocol/vectors/zones.json`: every zone rejection code, atomicity (nothing stored on any rejection), partial upload discarded, a new upload replaces the old, delete (known and unknown id), list, clear, store full, storage error, corrupted store; the ZONE_SETUP table rows IN and EXIT_1 to EXIT_8 and the non-exit list (contract section 6.1), idle timer only reset by upload messages.
   - **Tests first**: `tests/contract/test_vectors.py`; tags `zone:<CODE>` for every code in protocol section 7 and `setup:IN`, `setup:EXIT_1` to `setup:EXIT_8`, `setup:NONEXIT`.
   - **Covers**: FR-041, FR-031, FR-032, FR-033, FR-035, FR-037, SC-011, SC-012, SC-017
   - **Depends**: T034, T023

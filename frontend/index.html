@@ -18,10 +18,32 @@
       <span id="connection-indicator" class="indicator" data-state="connecting">Connecting…</span>
     </header>
     <main>
-      <section class="panel">
-        <h2>Overview</h2>
-        <p class="unavailable">Loading…</p>
+      <section class="panel" aria-labelledby="health-heading">
+        <h2 id="health-heading">Laptop health</h2>
+        <div class="tiles">
+          <div class="tile" id="health-cpu_load">
+            <div class="label">CPU load</div>
+            <div><span class="value unavailable" id="health-cpu_load-value">unavailable</span><span class="unit" id="health-cpu_load-unit"></span></div>
+          </div>
+          <div class="tile" id="health-gpu_load">
+            <div class="label">GPU load</div>
+            <div><span class="value unavailable" id="health-gpu_load-value">unavailable</span><span class="unit" id="health-gpu_load-unit"></span></div>
+          </div>
+          <div class="tile" id="health-ram_used">
+            <div class="label">RAM use</div>
+            <div><span class="value unavailable" id="health-ram_used-value">unavailable</span><span class="unit" id="health-ram_used-unit"></span></div>
+          </div>
+          <div class="tile" id="health-cpu_temp">
+            <div class="label">CPU temperature</div>
+            <div><span class="value unavailable" id="health-cpu_temp-value">unavailable</span><span class="unit" id="health-cpu_temp-unit"></span></div>
+          </div>
+          <div class="tile" id="health-gpu_temp">
+            <div class="label">GPU temperature</div>
+            <div><span class="value unavailable" id="health-gpu_temp-value">unavailable</span><span class="unit" id="health-gpu_temp-unit"></span></div>
+          </div>
+        </div>
       </section>
     </main>
+    <script type="module" src="/static/js/overview.js"></script>
   </body>
 </html>

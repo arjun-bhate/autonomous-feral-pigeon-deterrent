@@ -400,7 +400,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-006, SC-005
   - **Depends**: T055
 
-- [ ] T061 [US1] Create the health tiles on `frontend/index.html` and `frontend/js/overview.js`: CPU load, GPU load, RAM use, CPU and GPU temperature with units, refreshed from `health` messages without reloading; an unreadable value shows the word "unavailable"; connection indicator visible.
+- [X] T061 [US1] Create the health tiles on `frontend/index.html` and `frontend/js/overview.js`: CPU load, GPU load, RAM use, CPU and GPU temperature with units, refreshed from `health` messages without reloading; an unreadable value shows the word "unavailable"; connection indicator visible.
   - **Tests first**: `tests/integration/test_frontend_static.py` extended: `index.html` contains an element id for each of the five slots, the word "unavailable" handling in `overview.js` (text test), and the connection indicator; an API-level test already proves the data states (T059). Owner checks the real page using the quickstart steps for Story 1.
   - **Covers**: FR-001, FR-002, FR-006, SC-001, SC-002, SC-003
   - **Depends**: T060, T059

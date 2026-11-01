@@ -141,3 +141,77 @@ def test_the_recorded_checksum_matches_the_vendored_file():
     recorded = re.search(r"sha256:\s*([0-9a-f]{64})", readme)
     assert recorded, "the README must record the file's sha256"
     assert hashlib.sha256(library.read_bytes()).hexdigest() == recorded.group(1)
+
+
+# ---- T061: the health tiles on the Overview ----
+
+SLOTS = ("cpu_load", "gpu_load", "ram_used", "cpu_temp", "gpu_temp")
+
+
+def test_the_overview_has_an_element_for_each_of_the_five_health_slots():
+    html = read("index.html")
+    for slot in SLOTS:
+        assert f'id="health-{slot}"' in html
+        assert f'id="health-{slot}-value"' in html
+        assert f'id="health-{slot}-unit"' in html
+
+
+def test_the_slots_are_labelled_in_plain_words():
+    html = read("index.html")
+    for label in ("CPU load", "GPU load", "RAM use", "CPU temperature", "GPU temperature"):
+        assert label in html
+
+
+def test_the_overview_has_the_connection_indicator_and_loads_its_script_as_a_module():
+    html = read("index.html")
+    assert 'id="connection-indicator"' in html and 'data-state="' in html
+    assert '<script type="module" src="/static/js/overview.js"></script>' in html
+
+
+def test_overview_js_shows_the_word_unavailable_unless_the_reading_is_available():
+    source = read("js/overview.js")
+    assert 'const UNAVAILABLE_TEXT = "unavailable";' in source
+    assert 'reading.state === "available"' in source and "reading.value !== null" in source
+    assert 'classList.add("unavailable")' in source
+    assert 'classList.remove("unavailable")' in source
+
+
+def test_overview_js_shows_units_and_one_decimal():
+    source = read("js/overview.js")
+    assert 'percent: "%"' in source and 'celsius: "°C"' in source
+    assert "toFixed(1)" in source
+
+
+def test_overview_js_updates_from_health_messages_and_the_snapshot_without_reloading():
+    source = read("js/overview.js")
+    assert 'from "./live.js"' in source
+    assert 'live.on("health"' in source
+    assert 'live.on("snapshot"' in source
+    assert "location.reload" not in source
+
+
+def test_overview_js_replaces_all_health_slots_on_every_update():
+    source = read("js/overview.js")
+    assert "for (const slot of SLOTS)" in source  # every slot is drawn, even one not in the data
+    for slot in SLOTS:
+        assert f'"{slot}"' in source
+
+
+def test_overview_js_shows_unavailable_everywhere_while_disconnected():
+    source = read("js/overview.js")
+    handler = source.split('live.on("connection"')[1]
+    assert "disconnected" in handler and "showAllUnavailable" in handler
+
+
+def test_overview_js_writes_text_only_never_html():
+    source = read("js/overview.js")
+    for risky in ("innerHTML", "eval(", "document.write", "insertAdjacentHTML"):
+        assert risky not in source
+    assert "textContent" in source
+
+
+async def test_overview_js_is_served_as_javascript(tmp_path):
+    async with api_env(tmp_path, simulator=False) as env:
+        response = await env.client.get("/static/js/overview.js")
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]

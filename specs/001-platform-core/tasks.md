@@ -287,7 +287,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-041, FR-038, FR-025, FR-027, FR-048, FR-049, SC-017
   - **Depends**: T040, T039
 
-- [ ] T042 [US7] Create `tests/contract/test_vector_coverage.py`: fails if any denial reason, zone rejection code, timing rule, ZONE_SETUP table row, key rule (`key:*`) or FIRE_STOP state row in `protocol/PROTOCOL.md` has no vector whose `covers` names it; checks `codes:DIFFERS_FROM_PRIORITY` is present on the seven listed reasons; adds check 5 of the reason-code rules (the runner compares the numeric code byte of every DENIED reply with the number from `reason-codes.json`); retired reasons need no denial vector.
+- [X] T042 [US7] Create `tests/contract/test_vector_coverage.py`: fails if any denial reason, zone rejection code, timing rule, ZONE_SETUP table row, key rule (`key:*`) or FIRE_STOP state row in `protocol/PROTOCOL.md` has no vector whose `covers` names it; checks `codes:DIFFERS_FROM_PRIORITY` is present on the seven listed reasons; adds check 5 of the reason-code rules (the runner compares the numeric code byte of every DENIED reply with the number from `reason-codes.json`); retired reasons need no denial vector.
   - **Tests first**: the coverage test is the deliverable; also negative tests using a temporary copy of the vector set with one vector removed (must fail) and with the file complete (must pass).
   - **Covers**: FR-041, FR-040, SC-017, SC-008
   - **Depends**: T041, T033

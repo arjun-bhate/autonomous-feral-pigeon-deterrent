@@ -320,7 +320,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-007, FR-014
   - **Depends**: T044
 
-- [ ] T047 [P] Create `src/deterrent/observability/tracing.py`: `Trace` and `Span` objects for the eight fixed steps (capture, encode, network, inference, decision, command, esp32_ack, effector_action), statuses `OK`, `DENIED`, `TIMEOUT`, `NOT_RUN`, sequential-span rule, total equals last end minus first start, an unfinished step is kept with `TIMEOUT` or `NOT_RUN` (never omitted), `simulated` flag, outcome values from data-model.md.
+- [X] T047 [P] Create `src/deterrent/observability/tracing.py`: `Trace` and `Span` objects for the eight fixed steps (capture, encode, network, inference, decision, command, esp32_ack, effector_action), statuses `OK`, `DENIED`, `TIMEOUT`, `NOT_RUN`, sequential-span rule, total equals last end minus first start, an unfinished step is kept with `TIMEOUT` or `NOT_RUN` (never omitted), `simulated` flag, outcome values from data-model.md.
   - **Tests first**: `tests/unit/test_tracing.py`: a completed trace has exactly eight spans in position order; total equals the sum of sequential durations plus gaps; a missing esp32_ack is stored as `TIMEOUT`; a denied request gives `esp32_ack` `DENIED` with the reason and `effector_action` `NOT_RUN` with "no action"; overlapping spans are refused.
   - **Covers**: FR-009, SC-014
   - **Depends**: T044

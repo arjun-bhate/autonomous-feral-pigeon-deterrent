@@ -1,0 +1,173 @@
+/* Dashboard styles. Plain CSS, no build step.
+   Colours are named once as variables so light and dark mode share one layout. */
+
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --text: #1c2330;
+  --muted: #5d6778;
+  --border: #d6dae1;
+  --good: #1b7f3b;
+  --bad: #c62828;
+  --warn: #b26a00;
+  --accent: #1f5fbf;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181f;
+    --panel: #1d232d;
+    --text: #e6e9ef;
+    --muted: #9aa4b5;
+    --border: #323b4a;
+    --good: #4cc16f;
+    --bad: #ff6b6b;
+    --warn: #f0b04a;
+    --accent: #6ea8ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.45;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.site-nav {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.site-nav a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+main {
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* The connection indicator: grey while connecting, green when live, red when down. */
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.indicator::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.indicator[data-state="connecting"]::before {
+  background: var(--warn);
+}
+
+.indicator[data-state="connected"] {
+  color: var(--good);
+}
+
+.indicator[data-state="connected"]::before {
+  background: var(--good);
+}
+
+.indicator[data-state="disconnected"] {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.indicator[data-state="disconnected"]::before {
+  background: var(--bad);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.tile .label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tile .value {
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.tile .unit {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-left: 4px;
+}
+
+/* A value that cannot be read says so in words and looks dimmed; it never shows an old number. */
+.unavailable {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.banner {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+}

@@ -395,7 +395,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-001, FR-002, SC-002, SC-003, SC-001
   - **Depends**: T058, T055, T056, T054
 
-- [ ] T060 [US1] Create the frontend base: `frontend/css/app.css`, `frontend/js/live.js` (one WebSocket; "no message for 3 s" means disconnected and the indicator turns red; reconnect after 1 s, 2 s, then every 4 s; each successful connect replaces all live values with the new snapshot), and copy Chart.js into `frontend/vendor/chart.umd.min.js`. Ask the owner before downloading the Chart.js file (external download); the owner may supply the file instead.
+- [X] T060 [US1] Create the frontend base: `frontend/css/app.css`, `frontend/js/live.js` (one WebSocket; "no message for 3 s" means disconnected and the indicator turns red; reconnect after 1 s, 2 s, then every 4 s; each successful connect replaces all live values with the new snapshot), and copy Chart.js into `frontend/vendor/chart.umd.min.js`. Ask the owner before downloading the Chart.js file (external download); the owner may supply the file instead.
   - **Tests first**: `tests/integration/test_frontend_static.py`: the server serves the page, css, js and vendor file with correct content types; `live.js` exports the reconnect schedule (1, 2, 4 s) as a documented constant checked by a text test; reconnect after a server restart is tested at the API level in T055 and checked in the browser in the owner checklist (JavaScript behaviour is not run by pytest; say so in the report).
   - **Covers**: FR-006, SC-005
   - **Depends**: T055

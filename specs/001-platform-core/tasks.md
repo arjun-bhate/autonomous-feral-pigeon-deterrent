@@ -305,7 +305,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Purpose**: What every dashboard story needs. Nothing here can decide a fire.
 
-- [ ] T044 Create `src/deterrent/observability/schema.sql` and `src/deterrent/observability/store.py` part 1: SQLite writer thread for `logs`, `traces`, `spans` and `metric_events` in `data/observability.sqlite3` (columns, types and indexes exactly as data-model.md sections 1.2 to 1.5; times in UTC epoch microseconds), a non-blocking `submit()` for callers, and a read connection.
+- [X] T044 Create `src/deterrent/observability/schema.sql` and `src/deterrent/observability/store.py` part 1: SQLite writer thread for `logs`, `traces`, `spans` and `metric_events` in `data/observability.sqlite3` (columns, types and indexes exactly as data-model.md sections 1.2 to 1.5; times in UTC epoch microseconds), a non-blocking `submit()` for callers, and a read connection.
   - **Tests first**: `tests/unit/test_store_basic.py` (temp folder): records written by `submit()` are readable; ordering by `ts_us, id`; data survives closing and reopening the store; `submit()` returns without waiting for disk (writer thread stopped, call still returns); file lives under `data/` and not in the device folder.
   - **Covers**: FR-012, FR-013
   - **Depends**: T001, T003

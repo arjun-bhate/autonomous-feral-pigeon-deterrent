@@ -310,7 +310,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-012, FR-013
   - **Depends**: T001, T003
 
-- [ ] T045 Extend `store.py` part 2, resilience: when the database is full or locked keep running, hold the newest 5000 records in a memory ring, set a storage-warning flag within 10 s, retry every 2 s, log the fault, clear the warning and save the kept entries when storage recovers. A test hook switches modes `full`, `locked` and `ok`.
+- [X] T045 Extend `store.py` part 2, resilience: when the database is full or locked keep running, hold the newest 5000 records in a memory ring, set a storage-warning flag within 10 s, retry every 2 s, log the fault, clear the warning and save the kept entries when storage recovers. A test hook switches modes `full`, `locked` and `ok`.
   - **Tests first**: `tests/unit/test_store_resilience.py`: in `locked` mode `submit()` never blocks or raises and the warning appears within 10 s of FakeClock time; ring keeps the newest 5000; after `ok` the kept entries are written and the warning clears; zero crashes over 1000 submits; reads of live (in-memory) data still work while failing.
   - **Covers**: FR-013, SC-016, FR-012
   - **Depends**: T044, T004

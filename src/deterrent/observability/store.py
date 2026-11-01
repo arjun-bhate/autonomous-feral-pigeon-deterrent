@@ -10,6 +10,11 @@ which only puts the record on an in-memory queue and returns at once. A separate
 *writer thread* (a second line of execution running at the same time as the rest of
 the program) takes records off the queue and writes them in batches.
 
+If the disk fails (full or locked) the store keeps running: the newest records wait
+in a memory *ring* (a fixed-size buffer that drops its oldest entry when full), a
+storage warning is raised, and the write is retried every 2 seconds. When the disk
+works again everything kept is saved and the warning clears.
+
 Reading uses its own connection (``open_read_connection``) that is opened read-only,
 so a reader can never change the data. The database runs in WAL mode (write-ahead
 logging), which lets readers and the writer work at the same time without blocking
@@ -24,6 +29,8 @@ import queue
 import sqlite3
 import threading
 import time
+from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +38,14 @@ from typing import Any
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _WRITER_WAKE_S = 0.2
+RING_SIZE = 5000
+RETRY_INTERVAL_MS = 2000
+_FAULT_MODES = {
+    "ok": None,
+    "full": "database or disk is full",
+    "locked": "database is locked",
+}
+_MAX_NOTICES = 50
 
 
 def default_db_path() -> Path:
@@ -97,6 +112,14 @@ class MetricRecord:
 Record = LogRecord | TraceRecord | MetricRecord
 
 
+@dataclass(frozen=True)
+class StorageWarning:
+    """Shown on the dashboard while saving to disk is failing."""
+
+    message: str
+    since_us: int
+
+
 def _json_or_none(values: dict[str, Any]) -> str | None:
     return json.dumps(values, default=str, sort_keys=True) if values else None
 
@@ -104,9 +127,28 @@ def _json_or_none(values: dict[str, Any]) -> str | None:
 class ObservabilityStore:
     """Writes records to SQLite from a background thread. See the module notes."""
 
-    def __init__(self, path: Path | str | None = None, *, start: bool = True) -> None:
+    def __init__(
+        self,
+        path: Path | str | None = None,
+        *,
+        start: bool = True,
+        clock_us: Callable[[], int] = wall_clock_us,
+        ring_size: int = RING_SIZE,
+        retry_interval_ms: int = RETRY_INTERVAL_MS,
+    ) -> None:
         self.path = Path(path) if path is not None else default_db_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._clock_us = clock_us
+        self._retry_interval_us = retry_interval_ms * 1000
+        self._ring: deque[Record] = deque(maxlen=ring_size)
+        self._notices: list[LogRecord] = []  # the store's own fault and recovery lines
+        self._next_retry_us = 0
+        self._fault_mode = "ok"
+        self._warning: StorageWarning | None = None
+        self._warning_listeners: list[Callable[[StorageWarning | None], None]] = []
+        self.on_log: Callable[[LogRecord], None] | None = None
+        self.failed_attempts = 0
+        self.last_internal_error: Exception | None = None
         self._queue: queue.SimpleQueue[Record] = queue.SimpleQueue()
         self._pump_lock = threading.Lock()
         self._wake = threading.Event()
@@ -170,7 +212,10 @@ class ObservabilityStore:
         while not self._stop.is_set():
             self._wake.wait(_WRITER_WAKE_S)
             self._wake.clear()
-            self.pump()
+            try:
+                self.pump()
+            except Exception as error:  # a bug must not kill the writer thread
+                self.last_internal_error = error
 
     def _drain_queue(self) -> list[Record]:
         batch: list[Record] = []
@@ -181,17 +226,98 @@ class ObservabilityStore:
                 return batch
 
     def pump(self) -> None:
-        """One writer cycle: take everything queued and write it. Thread-safe."""
+        """One writer cycle: save what is queued (and what is being held). Thread-safe.
+
+        While the disk is failing, new records join the ring, and a write is attempted
+        again only when the retry time has come.
+        """
         with self._pump_lock:
-            batch = self._drain_queue()
-            if batch:
+            new = self._drain_queue()
+            now = self._clock_us()
+            failing = self._warning is not None
+            if failing:
+                self._ring.extend(new)
+                if now < self._next_retry_us:
+                    return
+                batch = [*self._ring, *self._notices]
+            else:
+                batch = new
+            if not batch:
+                return
+            try:
                 self._write(batch)
+            except sqlite3.Error as error:
+                self._on_write_failed([] if failing else new, error, now)
+            else:
+                self._on_write_ok(len(batch), now)
 
     def flush(self) -> None:
         """Write everything queued right now, on the calling thread."""
         self.pump()
 
+    # ---- failure handling -------------------------------------------------------------------
+
+    def _on_write_failed(self, held: list[Record], error: sqlite3.Error, now: int) -> None:
+        self.failed_attempts += 1
+        self._ring.extend(held)
+        self._next_retry_us = now + self._retry_interval_us
+        if self._warning is None:
+            self._raise_warning(error, now)
+
+    def _raise_warning(self, error: sqlite3.Error, now: int) -> None:
+        self._warning = StorageWarning(
+            f"Saving logs and metrics to disk is failing ({error}). The newest records are "
+            "kept in memory and saving is retried every 2 seconds.",
+            now,
+        )
+        self._notice("ERROR", f"storage fault: {error}", now)
+        for listener in list(self._warning_listeners):
+            listener(self._warning)
+
+    def _on_write_ok(self, saved: int, now: int) -> None:
+        was_failing = self._warning is not None
+        self._ring.clear()
+        self._notices.clear()
+        if was_failing:
+            self._warning = None
+            self._notice("INFO", f"storage recovered; {saved} kept records saved", now, queued=True)
+            for listener in list(self._warning_listeners):
+                listener(None)
+
+    def _notice(self, severity: str, message: str, now: int, *, queued: bool = False) -> None:
+        """A log line written by the store itself about its own health."""
+        record = LogRecord(self.next_log_id(), now, "store", severity, message)
+        if queued:
+            self._queue.put(record)
+        else:
+            self._notices.append(record)
+            del self._notices[:-_MAX_NOTICES]
+        if self.on_log is not None:
+            self.on_log(record)
+
+    @property
+    def storage_warning(self) -> StorageWarning | None:
+        return self._warning
+
+    def add_warning_listener(self, listener: Callable[[StorageWarning | None], None]) -> None:
+        """Call ``listener`` with the warning when it is raised and with None when it clears."""
+        self._warning_listeners.append(listener)
+
+    def held_records(self) -> tuple[Record, ...]:
+        """The records waiting in memory because the disk is failing (oldest first)."""
+        with self._pump_lock:
+            return tuple(self._ring)
+
+    def set_fault_mode(self, mode: str) -> None:
+        """Test hook: make every write fail as if the disk were ``full`` or ``locked``."""
+        if mode not in _FAULT_MODES:
+            raise ValueError(f"unknown storage mode {mode!r}; use ok, full or locked")
+        self._fault_mode = mode
+
     def _write(self, batch: list[Record]) -> None:
+        message = _FAULT_MODES[self._fault_mode]
+        if message is not None:
+            raise sqlite3.OperationalError(message)
         if self._writer is None:
             self._writer = self._connect_writer()
         conn = self._writer

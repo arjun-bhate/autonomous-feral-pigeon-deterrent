@@ -184,6 +184,10 @@ class Platform:
         self._device_listeners: list[Callable[[dict | None], None]] = []
         self._storage_listeners: list[Callable[[StorageWarning | None], None]] = []
 
+    @property
+    def started(self) -> bool:
+        return self.store is not None and not self.store_closed
+
     # ---- lifecycle ----
 
     async def start(self) -> None:

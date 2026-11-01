@@ -3,7 +3,7 @@
 import asyncio
 
 from deterrent.composition import Platform
-from deterrent.config import load_settings
+from deterrent.config import Settings, load_settings
 from deterrent.link.mock import FaultInjectingLink
 from deterrent.observability import queries
 from deterrent.protocol.codes import Result
@@ -16,7 +16,7 @@ WALL_START_US = 1_700_000_000_000_000
 class Env:
     """A started platform whose clocks are all one VirtualTime."""
 
-    def __init__(self, tmp_path, *, faults: bool = False) -> None:
+    def __init__(self, tmp_path, *, faults: bool = False, dev_tools: bool = True) -> None:
         self.vt = VirtualTime()
         wrapper = None
         self.faults: FaultInjectingLink | None = None
@@ -27,7 +27,7 @@ class Env:
                 return self.faults
 
         self.platform = Platform(
-            load_settings(),
+            Settings(**{**load_settings().model_dump(), "dev_tools": dev_tools}),
             data_dir=tmp_path,
             clock=self.vt.clock,
             wall_clock_us=lambda: WALL_START_US + self.vt.elapsed_ms * 1000,
@@ -39,7 +39,8 @@ class Env:
         )
 
     async def start(self, *, simulator: bool = True, homed: bool = True) -> None:
-        await self.platform.start()
+        if not self.platform.started:
+            await self.platform.start()
         if simulator:
             task = asyncio.create_task(self.platform.start_simulator())
             await self.vt.advance(50)

@@ -355,7 +355,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-047, FR-009, FR-011, FR-021, SC-014
   - **Depends**: T052, T047, T048
 
-- [ ] T054 Create `src/deterrent/api/app.py` (`create_app()` factory, lifespan, static files mounted for `frontend/`, bind only 127.0.0.1, one error shape `{"error":{"code","message"}}`) and in `api/routes_read.py` the `GET /api/device/status` and `GET /api/system/status` endpoints reading from memory, plus the page routes `/`, `/logs`, `/traces`, `/observability`.
+- [X] T054 Create `src/deterrent/api/app.py` (`create_app()` factory, lifespan, static files mounted for `frontend/`, bind only 127.0.0.1, one error shape `{"error":{"code","message"}}`) and in `api/routes_read.py` the `GET /api/device/status` and `GET /api/system/status` endpoints reading from memory, plus the page routes `/`, `/logs`, `/traces`, `/observability`.
   - **Tests first**: `tests/integration/test_api_basic.py` (httpx): device status with simulator stopped is exactly `{"running": false}`; running status has every field from dashboard-api.md; system status shows `storage_warning` and `dev_tools`; unknown route returns the standard error shape; the server settings bind loopback only; responses never contain image data or secret fields.
   - **Covers**: FR-004, FR-013, FR-014, FR-030
   - **Depends**: T052

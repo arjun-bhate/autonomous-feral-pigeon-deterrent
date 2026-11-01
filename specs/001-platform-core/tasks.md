@@ -90,7 +90,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-015, FR-028, FR-038, FR-023
   - **Depends**: T008
 
-- [ ] T010 [P] Create `src/deterrent/geometry/polygon.py` part 1: integer self-crossing detection (including touching and collinear overlap), duplicate consecutive points, and zero-area test.
+- [X] T010 [P] Create `src/deterrent/geometry/polygon.py` part 1: integer self-crossing detection (including touching and collinear overlap), duplicate consecutive points, and zero-area test.
   - **Tests first**: `tests/unit/test_polygon_crossing.py`: bow-tie crosses; square and L-shape do not; a vertex touching another edge counts as crossing; repeated consecutive point is degenerate; collinear points have zero area; random simple polygons built by convex hull never report crossing, and a random edge swap on them is caught (hypothesis).
   - **Covers**: FR-032, FR-046
   - **Depends**: T001

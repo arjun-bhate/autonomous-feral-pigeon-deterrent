@@ -135,7 +135,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-029, FR-016, SC-007
   - **Depends**: T015a
 
-- [ ] T016 [US6] Add boot, homing and status to `device.py`: BOOT then HOMING for `homing_duration_ms` (simulated drift value emitted as an event for metric `homing_drift_simulated`) then DISARMED with `armed` false and `homed` true; STATUS_REQUEST and the STATUS event on every change and at least once per second; state is always one of the 12 named states.
+- [X] T016 [US6] Add boot, homing and status to `device.py`: BOOT then HOMING for `homing_duration_ms` (simulated drift value emitted as an event for metric `homing_drift_simulated`) then DISARMED with `armed` false and `homed` true; STATUS_REQUEST and the STATUS event on every change and at least once per second; state is always one of the 12 named states.
   - **Tests first**: `tests/unit/test_device_boot.py`: boot sequence BOOT, HOMING, DISARMED at the right FakeClock times; never armed on boot; exactly one drift event; status block fields correct in every state; STATUS event sent on change and at 1 s; no unnamed state value can be produced.
   - **Covers**: FR-017, FR-028, FR-005, FR-011
   - **Depends**: T015b

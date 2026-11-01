@@ -29,6 +29,9 @@ from deterrent.protocol.messages import (
     HostMessage,
     RejectNotice,
     Reply,
+    StatusBlock,
+    StatusEvent,
+    StatusRequest,
     decode_host_message,
     device_frame,
 )
@@ -43,6 +46,7 @@ _NOTICES_PER_WINDOW = 5
 _NOTICE_WINDOW_MS = 1000
 _SEQ_MODULUS = 65536
 _MAX_FORWARD_DISTANCE = 32767
+_STATUS_INTERVAL_MS = 1000
 
 
 class Device:
@@ -62,7 +66,7 @@ class Device:
         self._sink = sink if sink is not None else DeviceEventSink()
         self.storage: ZoneStorage = storage if storage is not None else MockZoneStorage()
         self._boot_duration_ms = boot_duration_ms
-        self._simulated_drift_cdeg = simulated_drift_cdeg
+        self.simulated_drift_cdeg = simulated_drift_cdeg
         self._allow_test_injection = allow_test_injection
 
         self.state = State.BOOT
@@ -72,6 +76,12 @@ class Device:
         self.homed = False
         self.effector_on = False
         self.fault_mask = 0
+        self.key_on = False
+
+        self._boot_started_ms = clock.now_ms()
+        self._homing_started_ms = 0
+        self._last_status: StatusBlock | None = None
+        self._last_status_ms = 0
 
         self._reader = FrameReader()
         self._out: list[bytes] = []
@@ -82,7 +92,9 @@ class Device:
         self._reply_cache: OrderedDict[int, bytes] = OrderedDict()
         # Command handlers by message class. A valid message with no handler is refused
         # (WRONG_STATE) rather than accepted. Tests may replace entries.
-        self.handlers: dict[type, Handler] = {}
+        self.handlers: dict[type, Handler] = {
+            StatusRequest: self._on_status_request,
+        }
 
     # ---- the outside world --------------------------------------------------------------
 
@@ -113,10 +125,68 @@ class Device:
         self._out.append(device_frame(message, self._event_seq))
         self._event_seq = (self._event_seq + 1) & 0xFFFF
 
-    # ---- time-based work (grows task by task) ----------------------------------------------
+    # ---- state and status -----------------------------------------------------------------
+
+    def _set_state(self, new: State) -> None:
+        if new is not self.state:
+            old, self.state = self.state, new
+            self._sink.state_changed(self.now_ms(), old, new)
+
+    def status_block(self) -> StatusBlock:
+        return StatusBlock(
+            state=self.state,
+            pan=self.pan,
+            tilt=self.tilt,
+            key_on=self.key_on,
+            armed=self.armed,
+            homed=self.homed,
+            zone_store_valid=self._zone_store_valid(),
+            effector_on=self.effector_on,
+            fault_mask=self.fault_mask,
+            zone_count=self._zone_count(),
+        )
+
+    def _zone_store_valid(self) -> bool:
+        return True  # replaced by the derived check when stored zones arrive (T023)
+
+    def _zone_count(self) -> int:
+        return 0  # replaced when stored zones arrive (T023)
+
+    def _on_status_request(self, message: StatusRequest) -> Reply:
+        return Reply.ok(MsgType.STATUS_REQUEST, self.status_block().encode_payload())
+
+    def _send_status_if_due(self) -> None:
+        """Send a STATUS event when anything in the block changed, and at least once a second."""
+        block = self.status_block()
+        now = self.now_ms()
+        if (
+            block != self._last_status
+            or elapsed_ms(now, self._last_status_ms) >= _STATUS_INTERVAL_MS
+        ):
+            self._last_status = block
+            self._last_status_ms = now
+            self._send_event(StatusEvent(block))
+
+    # ---- time-based work ----------------------------------------------------------------------
 
     def _service(self) -> None:
-        pass
+        """Everything that happens because time passed. Runs on every tick and message."""
+        now = self.now_ms()
+        if self.state is State.BOOT:
+            if elapsed_ms(now, self._boot_started_ms) >= self._boot_duration_ms:
+                self._homing_started_ms = now
+                self._set_state(State.HOMING)
+        if self.state is State.HOMING:
+            if elapsed_ms(now, self._homing_started_ms) >= self.settings.homing_duration_ms:
+                self._finish_homing()
+        self._send_status_if_due()
+
+    def _finish_homing(self) -> None:
+        self.homed = True
+        self.pan = 0
+        self.tilt = 0
+        self._sink.homing_drift(self.now_ms(), self.simulated_drift_cdeg)
+        self._set_state(State.DISARMED)
 
     # ---- intake: steps 1 to 3 -----------------------------------------------------------------
 

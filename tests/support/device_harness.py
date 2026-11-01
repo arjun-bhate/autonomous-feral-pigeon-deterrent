@@ -84,7 +84,9 @@ class Harness:
         return self.seq
 
     def send_wire(self, wire: bytes) -> list[Out]:
-        return self._collect(self.device.handle_bytes(wire))
+        """Send raw wire bytes. Returns the replies only; events go to ``self.log``."""
+        outs = self._collect(self.device.handle_bytes(wire))
+        return [o for o in outs if not 0xC0 <= o.type <= 0xC2]
 
     def send(self, message: HostMessage, seq: int | None = None) -> list[Out]:
         return self.send_wire(host_frame(message, self.next_seq() if seq is None else seq))
@@ -96,9 +98,8 @@ class Harness:
 
     def reply(self, message: HostMessage, seq: int | None = None):
         """Send a message and return the one reply to it (not events)."""
-        outs = self.send(message, seq)
-        replies = [o for o in outs if not 0xC0 <= o.type <= 0xC2]
-        assert len(replies) == 1, outs
+        replies = self.send(message, seq)
+        assert len(replies) == 1, replies
         return replies[0].message
 
     def heartbeat(self, person_clear: bool = True) -> Reply:
@@ -110,16 +111,14 @@ class Harness:
         return self._collect(self.device.tick())
 
     def advance(self, ms: int) -> list[Out]:
-        """Move the clock forward in steps of at most TICK_MS, ticking the device each step."""
-        outs: list[Out] = []
+        """Tick at the current time, then move forward in steps of at most TICK_MS, ticking each."""
+        outs = self.tick()
         remaining = ms
         while remaining > 0:
             step = min(TICK_MS, remaining)
             self.clock.advance(step)
             outs += self.tick()
             remaining -= step
-        if ms == 0:
-            outs += self.tick()
         return outs
 
     # ---- looking at the result -----------------------------------------------------------

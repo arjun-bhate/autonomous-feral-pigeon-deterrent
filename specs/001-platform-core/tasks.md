@@ -85,7 +85,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-015, FR-016, FR-038, FR-022
   - **Depends**: T006, T007
 
-- [ ] T009 Extend `src/deterrent/protocol/messages.py` part 2, device-to-host: reply layout `type|0x80, seq, result, code, data`, per-message reply data (MOVE/JOG angles, HEARTBEAT `device_ms` and state, ZONE_LIST entries, FIRE_REQUEST GRANTED `granted_on_ms`, DENIED `fault_mask`), the 13-byte status block, generic reject `0xFE`, and unsolicited events STATUS `0xC0`, REJECT_NOTICE `0xC1`, EFFECTOR_EVENT `0xC2`.
+- [X] T009 Extend `src/deterrent/protocol/messages.py` part 2, device-to-host: reply layout `type|0x80, seq, result, code, data`, per-message reply data (MOVE/JOG angles, HEARTBEAT `device_ms` and state, ZONE_LIST entries, FIRE_REQUEST GRANTED `granted_on_ms`, DENIED `fault_mask`), the 13-byte status block, generic reject `0xFE`, and unsolicited events STATUS `0xC0`, REJECT_NOTICE `0xC1`, EFFECTOR_EVENT `0xC2`.
   - **Tests first**: `tests/unit/test_messages_device.py`: round trip each reply and event; status block is exactly 13 bytes with the documented field order; DENIED carries the permanent code, not the priority; EFFECTOR_EVENT cause 13 is refused at encode time; ZONE_LIST for 8 zones fits the 59-byte payload limit.
   - **Covers**: FR-015, FR-028, FR-038, FR-023
   - **Depends**: T008

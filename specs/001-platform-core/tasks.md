@@ -390,7 +390,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-001, FR-002, FR-011, SC-001, SC-003
   - **Depends**: T057, T048
 
-- [ ] T059 [US1] Wire health into the API: `GET /api/health/current` in `api/routes_read.py`, the `health` message (every collection) in `api/live.py`, the `health` part of the `snapshot`, collector start in `composition.py`, and the dev route `POST /api/dev/sensors/{name}/fail` in `api/routes_dev.py`.
+- [X] T059 [US1] Wire health into the API: `GET /api/health/current` in `api/routes_read.py`, the `health` message (every collection) in `api/live.py`, the `health` part of the `snapshot`, collector start in `composition.py`, and the dev route `POST /api/dev/sensors/{name}/fail` in `api/routes_dev.py`.
   - **Tests first**: `tests/integration/test_health_api.py`: current readings match the dashboard-api.md shape; failing the GPU sensor gives `state: unavailable`, `value: null` for GPU and live values for the rest; websocket `health` messages arrive at least every 2 s; first data arrives within 3 s of connecting (SC-002); unfailing restores the value.
   - **Covers**: FR-001, FR-002, SC-002, SC-003, SC-001
   - **Depends**: T058, T055, T056, T054

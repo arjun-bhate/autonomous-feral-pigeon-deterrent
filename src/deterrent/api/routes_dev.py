@@ -86,6 +86,11 @@ class EngagementBody(_Strict):
     duration_ms: int = Field(default=500, ge=0, le=65535)
 
 
+class SensorBody(_Strict):
+    on: bool
+    mode: Literal["error", "hang"] = "error"
+
+
 class StorageBody(_Strict):
     mode: Literal["full", "locked", "ok"]
 
@@ -139,6 +144,17 @@ async def corrupt_zone_store(request: Request) -> dict[str, bool]:
 async def storage_fail(body: StorageBody, request: Request) -> dict[str, str]:
     get_platform(request).set_storage_mode(body.mode)
     return {"mode": body.mode}
+
+
+@router.post("/sensors/{name}/fail")
+async def sensor_fail(name: str, body: SensorBody, request: Request) -> dict[str, Any]:
+    """Make one health sensor unreadable (it errors or hangs), or make it work again."""
+    platform = get_platform(request)
+    try:
+        platform.set_sensor_failure(name, body.on, body.mode)
+    except KeyError as error:
+        raise ApiError(404, "SENSOR_NOT_FOUND", f"There is no sensor called {name!r}.") from error
+    return {"name": name, "failed": body.on, "mode": body.mode}
 
 
 # ---- engagement ----

@@ -37,6 +37,15 @@ def system_status(platform: Platform, dev_tools: bool) -> dict[str, Any]:
     }
 
 
+def health_payload(platform: Platform) -> dict[str, Any]:
+    return {"readings": platform.health_readings()}
+
+
+@router.get("/api/health/current")
+async def health_current(request: Request) -> dict[str, Any]:
+    return health_payload(get_platform(request))
+
+
 @router.get("/api/device/status")
 async def device_status(request: Request) -> dict[str, Any]:
     return get_platform(request).device_status()

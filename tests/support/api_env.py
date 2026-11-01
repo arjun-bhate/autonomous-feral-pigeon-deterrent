@@ -26,9 +26,10 @@ async def api_env(
     homed: bool = True,
     dev_tools: bool = True,
     faults: bool = False,
+    sensors: bool = False,
     frontend_dir: Path | None = None,
 ):
-    env = Env(tmp_path, faults=faults, dev_tools=dev_tools)
+    env = Env(tmp_path, faults=faults, dev_tools=dev_tools, sensors=sensors)
     app = create_app(env.platform.settings, platform=env.platform, frontend_dir=frontend_dir)
     async with app.router.lifespan_context(app):
         await env.start(simulator=simulator, homed=homed)

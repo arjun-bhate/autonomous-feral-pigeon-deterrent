@@ -22,13 +22,15 @@ waits for a disk.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Any
 
 from deterrent.clock import Clock, SystemClock
 from deterrent.config import Settings, load_settings
 from deterrent.engagement.simulated import SimulatedEngagement
+from deterrent.health.collector import HealthCollector, Spawn, spawn_daemon_thread
+from deterrent.health.sensors import FaultableProvider, SensorProvider, default_providers
 from deterrent.link.base import DeviceLink
 from deterrent.link.client import DeviceClient
 from deterrent.link.inprocess import InProcessLink
@@ -157,6 +159,8 @@ class Platform:
         start_store_thread: bool = True,
         boot_duration_ms: int = SIMULATED_BOOT_MS,
         link_wrapper: Callable[[DeviceLink], DeviceLink] | None = None,
+        sensor_providers: Sequence[SensorProvider] | None = None,
+        health_spawn: Spawn = spawn_daemon_thread,
     ) -> None:
         self.settings = settings if settings is not None else load_settings()
         self.data_dir = Path(data_dir) if data_dir is not None else default_db_path().parent
@@ -167,6 +171,10 @@ class Platform:
         self._start_store_thread = start_store_thread
         self._boot_duration_ms = boot_duration_ms
         self._link_wrapper = link_wrapper
+        self._sensor_providers = sensor_providers
+        self._health_spawn = health_spawn
+        self.health: HealthCollector | None = None
+        self._faultable: dict[str, FaultableProvider] = {}
 
         self.store: ObservabilityStore | None = None
         self.logger: StructuredLogger | None = None
@@ -219,10 +227,29 @@ class Platform:
             wall_clock_us=self.wall_clock_us,
             **extra,
         )
+        providers = (
+            default_providers() if self._sensor_providers is None else self._sensor_providers
+        )
+        self._faultable = {p.name: FaultableProvider(p) for p in providers}
+        self.health = HealthCollector(
+            list(self._faultable.values()),
+            self.clock,
+            self.wall_clock_us,
+            self._sleep,
+            self.metrics,
+            spawn=self._health_spawn,
+        )
+        await self.health.start()
         self.logger.info("api", "platform started")
+
+    @property
+    def health_running(self) -> bool:
+        return self.health is not None and self.health.running
 
     async def stop(self) -> None:
         await self.stop_simulator()
+        if self.health is not None:
+            await self.health.stop()
         if self.store is not None and not self.store_closed:
             self.logger.info("api", "platform stopped")
             self.store.close()
@@ -286,6 +313,31 @@ class Platform:
         self.logger.info("api", "simulator stopped")
         for listener in list(self._device_listeners):
             listener(None)
+
+    # ---- laptop health, from memory ----
+
+    def health_readings(self) -> list[dict[str, Any]]:
+        """The newest laptop readings for ``/api/health/current`` (memory only)."""
+        if self.health is None:
+            return []
+        return [
+            {
+                "name": r.name,
+                "value": r.value,
+                "unit": r.unit,
+                "state": r.state,
+                "read_at_us": r.read_at_us,
+            }
+            for r in self.health.readings()
+        ]
+
+    def set_sensor_failure(self, name: str, failed: bool, mode: str = "error") -> None:
+        """Test input: make a health sensor unreadable (error or hang), or restore it."""
+        provider = self._faultable[name]  # KeyError if there is no such sensor
+        if failed:
+            provider.fail(mode)
+        else:
+            provider.restore()
 
     # ---- inputs the hardware would provide ----
 

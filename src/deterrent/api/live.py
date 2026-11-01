@@ -14,7 +14,7 @@ Every message is ``{"type": ..., "data": ...}``:
 ``tick``             every second, so the browser can tell the server is alive
 ===================  ==========================================================
 
-(``health`` messages are added with the laptop health feature.)
+``health``           the laptop readings (CPU, GPU, memory, temperatures), every second
 
 Rules this module keeps:
 
@@ -32,7 +32,7 @@ from typing import Any, Protocol
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from deterrent.api.routes_read import system_status
+from deterrent.api.routes_read import health_payload, system_status
 from deterrent.composition import Platform
 from deterrent.observability.store import LogRecord, StorageWarning
 
@@ -134,6 +134,7 @@ class LiveHub:
     def _snapshot(self) -> dict[str, Any]:
         platform = self._platform
         return {
+            "health": health_payload(platform),
             "device": platform.device_status(),
             "system": system_status(platform, platform.settings.dev_tools),
             "recent_logs": [log_item(r) for r in platform.logger.recent(SNAPSHOT_LOGS)],
@@ -177,6 +178,7 @@ class LiveHub:
         while True:
             await self._platform.sleep(TICK_SECONDS)
             self._broadcast({"type": "tick", "data": {"server_us": self._platform.wall_clock_us()}})
+            self._broadcast({"type": "health", "data": health_payload(self._platform)})
             self._refresh_device()
 
     def _refresh_device(self) -> None:

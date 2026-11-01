@@ -4,10 +4,12 @@ import asyncio
 
 from deterrent.composition import Platform
 from deterrent.config import Settings, load_settings
+from deterrent.health.sensors import SENSOR_UNITS, MockSensorProvider
 from deterrent.link.mock import FaultInjectingLink
 from deterrent.observability import queries
 from deterrent.protocol.codes import Result
 from deterrent.protocol.messages import Arm
+from support.sensor_spawn import spawn_and_wait_briefly
 from support.virtual_time import VirtualTime
 
 WALL_START_US = 1_700_000_000_000_000
@@ -16,7 +18,9 @@ WALL_START_US = 1_700_000_000_000_000
 class Env:
     """A started platform whose clocks are all one VirtualTime."""
 
-    def __init__(self, tmp_path, *, faults: bool = False, dev_tools: bool = True) -> None:
+    def __init__(
+        self, tmp_path, *, faults: bool = False, dev_tools: bool = True, sensors: bool = False
+    ) -> None:
         self.vt = VirtualTime()
         wrapper = None
         self.faults: FaultInjectingLink | None = None
@@ -26,6 +30,12 @@ class Env:
                 self.faults = FaultInjectingLink(link, sleep=self.vt.sleep)
                 return self.faults
 
+        # Mock sensors with distinct values; with sensors=False no health sensors run at all.
+        self.sensors = (
+            {name: MockSensorProvider(name, 10.0 + i) for i, name in enumerate(SENSOR_UNITS)}
+            if sensors
+            else {}
+        )
         self.platform = Platform(
             Settings(**{**load_settings().model_dump(), "dev_tools": dev_tools}),
             data_dir=tmp_path,
@@ -36,6 +46,8 @@ class Env:
             start_store_thread=False,
             boot_duration_ms=0,
             link_wrapper=wrapper,
+            sensor_providers=list(self.sensors.values()),
+            health_spawn=spawn_and_wait_briefly,
         )
 
     async def start(self, *, simulator: bool = True, homed: bool = True) -> None:

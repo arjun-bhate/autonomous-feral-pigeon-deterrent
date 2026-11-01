@@ -104,6 +104,10 @@ class HealthCollector:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks = []
 
+    @property
+    def running(self) -> bool:
+        return bool(self._tasks)
+
     def readings(self) -> list[HealthReading]:
         """The newest reading of every sensor, in the order the providers were given."""
         return [self._readings[p.name] for p in self._providers]

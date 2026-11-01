@@ -254,6 +254,48 @@ class GpuTempSensor(_Named):
         return self._source.temperature()
 
 
+class FaultableProvider:
+    """Wraps a provider so the developer tools can make it fail (error) or hang on demand."""
+
+    def __init__(self, inner: SensorProvider) -> None:
+        self._inner = inner
+        self.name = inner.name
+        self.unit = inner.unit
+        self._lock = threading.Lock()
+        self._mode = "ok"
+        self._release = threading.Event()
+
+    @property
+    def failed(self) -> bool:
+        return self._mode != "ok"
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    def fail(self, mode: str = "error") -> None:
+        if mode not in ("error", "hang"):
+            raise ValueError("mode must be error or hang")
+        with self._lock:
+            self._mode = mode
+        self._release.clear()
+
+    def restore(self) -> None:
+        with self._lock:
+            self._mode = "ok"
+        self._release.set()
+
+    def read(self) -> float | None:
+        while True:
+            mode = self._mode
+            if mode == "error":
+                raise RuntimeError(f"sensor {self.name} made to fail")
+            if mode == "ok":
+                return self._inner.read()
+            if not self._release.wait(_HANG_LIMIT_S):
+                return None
+
+
 def default_providers() -> list[SensorProvider]:
     """The five real providers (a GPU or temperature sensor that is missing reads unavailable)."""
     nvml = NvmlSource()

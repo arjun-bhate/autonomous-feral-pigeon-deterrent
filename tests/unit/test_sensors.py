@@ -271,3 +271,42 @@ def test_every_real_provider_has_a_unit_and_never_raises_with_broken_libraries()
         GpuTempSensor(NvmlSource(boom)),
     ]
     assert [p.read() for p in providers] == [None] * 5
+
+
+# ---- the failure switch used by the developer tools ----
+
+
+def test_a_faultable_provider_passes_readings_through_until_told_to_fail():
+    from deterrent.health.sensors import FaultableProvider
+
+    inner = MockSensorProvider("cpu_load", 12.0)
+    wrapped = FaultableProvider(inner)
+    assert (wrapped.name, wrapped.unit, wrapped.read()) == ("cpu_load", "percent", 12.0)
+    wrapped.fail()
+    with pytest.raises(RuntimeError):
+        wrapped.read()
+    wrapped.restore()
+    assert wrapped.read() == 12.0
+    assert wrapped.failed is False
+
+
+def test_a_faultable_provider_can_hang_until_restored():
+    from deterrent.health.sensors import FaultableProvider
+
+    wrapped = FaultableProvider(MockSensorProvider("gpu_temp", 50.0))
+    wrapped.fail("hang")
+    results: list[float | None] = []
+    thread = threading.Thread(target=lambda: results.append(wrapped.read()), daemon=True)
+    thread.start()
+    time.sleep(0.1)
+    assert thread.is_alive() and wrapped.failed is True
+    wrapped.restore()
+    thread.join(timeout=5)
+    assert results == [50.0]
+
+
+def test_a_faultable_provider_refuses_an_unknown_mode():
+    from deterrent.health.sensors import FaultableProvider
+
+    with pytest.raises(ValueError):
+        FaultableProvider(MockSensorProvider("cpu_load", 1.0)).fail("melt")

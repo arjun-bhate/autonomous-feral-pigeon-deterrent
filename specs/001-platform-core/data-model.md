@@ -153,7 +153,7 @@ The ZONE_SETUP rows are exactly the table "Leaving ZONE_SETUP" in [contracts/pro
 
 Key-off trigger: the **change** from on to off, in every state except SAFE_ERROR. A device that boots with the key already off is not faulted; it simply cannot arm.
 
-Refusals: while BOOT or HOMING, MOVE, JOG, ARM and FIRE are refused with a specific code; no angle changes.
+Refusals: while BOOT or HOMING, MOVE, JOG and ARM are refused with a specific reject code (`NOT_HOMED` in BOOT, `BUSY_HOMING` in HOMING); no angle changes. FIRE_REQUEST in BOOT is rejected `NOT_HOMED` without arbitration; in HOMING it is denied `NOT_HOMED` by arbitration.
 
 ### 2.2 Zone and ZoneStore
 

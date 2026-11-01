@@ -21,12 +21,23 @@ from collections.abc import Callable
 
 from deterrent.clock import Clock, elapsed_ms
 from deterrent.config import PAN_SOFT_LIMIT_CDEG, TILT_SOFT_LIMIT_CDEG, Settings
-from deterrent.protocol.codes import DenyReason, Fault, MsgType, RejectCode, Result, State
+from deterrent.geometry.polygon import zone_margin_cdeg
+from deterrent.protocol.codes import (
+    DenyReason,
+    EffectorEvent,
+    Fault,
+    MsgType,
+    RejectCode,
+    Result,
+    State,
+)
 from deterrent.protocol.framing import Frame, FrameError, FrameReader
 from deterrent.protocol.messages import (
     Arm,
     DeviceMessage,
     Disarm,
+    EffectorEventMessage,
+    FireRequest,
     GenericReject,
     Heartbeat,
     Home,
@@ -50,6 +61,7 @@ from deterrent.protocol.messages import (
     pack_heartbeat_data,
     pack_zone_list,
 )
+from deterrent.simulator.arbitration import FireSnapshot, decide_fire
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.person import PersonCheck, PersonSnapshot, PersonTimers, evaluate_person
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
@@ -95,6 +107,9 @@ class Device:
         self.fault_mask = 0
         self.key_on = False
         self.zones = ZoneService(self.storage, settings)
+        self._shot_started_ms = 0
+        self._shot_duration_ms = 0
+        self._cooldown_started_ms: int | None = None
         self._person = PersonTimers()
         self._heartbeat_seen = False
         self._last_heartbeat_ms = 0
@@ -127,6 +142,7 @@ class Device:
             ZoneDelete: self._on_zone_delete,
             ZoneList: self._on_zone_list,
             ZoneClear: self._on_zone_clear,
+            FireRequest: self._on_fire_request,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -483,6 +499,60 @@ class Device:
         if entries is None:
             return Reply.rejected(MsgType.ZONE_LIST, RejectCode.ZONE_STORAGE_ERROR)
         return Reply.ok(MsgType.ZONE_LIST, pack_zone_list(entries))
+
+    # ---- firing --------------------------------------------------------------------------------
+
+    def _fire_snapshot(self) -> FireSnapshot:
+        """A read-only picture of everything the fire decision depends on, taken now."""
+        valid = self.zones.store_valid()  # recomputed from the stored bytes, never cached
+        return FireSnapshot(
+            now_ms=self.now_ms(),
+            state=self.state,
+            homed=self.homed,
+            armed=self.armed,
+            key_on=self.key_on,
+            fault_mask=self.fault_mask,
+            last_heartbeat_ms=self._last_heartbeat_ms if self._heartbeat_seen else None,
+            watchdog_ms=self.settings.watchdog_ms,
+            person=self.person_check(),
+            zone_store_valid=valid,
+            pan=self.pan,
+            tilt=self.tilt,
+            elevation_min_cdeg=self.settings.elevation_min_cdeg,
+            elevation_max_cdeg=self.settings.elevation_max_cdeg,
+            zones=self.zones.polygons() if valid else (),
+            zone_margin_cdeg=zone_margin_cdeg(self.settings.aiming_error_cdeg),
+            per_shot_ms=self.settings.per_shot_ms,
+            cooldown_started_ms=self._cooldown_started_ms,
+            cooldown_ms=self.settings.cooldown_ms,
+        )
+
+    def _on_fire_request(self, message: FireRequest) -> Reply:
+        """Grant or deny a fire request. The grant is decided only by ``decide_fire``."""
+        if self.state is State.BOOT:
+            # Nothing is homed yet: refuse without arbitration.
+            return Reply.rejected(MsgType.FIRE_REQUEST, RejectCode.NOT_HOMED)
+        if self.effector_on:
+            # A shot is already running: never grant a second one or extend the first.
+            return Reply.rejected(MsgType.FIRE_REQUEST, RejectCode.WRONG_STATE)
+        reason = decide_fire(self._fire_snapshot(), message)
+        if reason is not None:
+            self._sink.fire_denied(self.now_ms(), reason)
+            detail = self.fault_mask if reason is DenyReason.FAULT_ACTIVE else 0
+            return Reply.denied(reason, detail)
+        return self._start_shot(message.duration_ms)
+
+    def _start_shot(self, duration_ms: int) -> Reply:
+        """Only ever called with a grant from ``decide_fire``."""
+        now = self.now_ms()
+        self.effector_on = True
+        self._shot_started_ms = now
+        self._shot_duration_ms = duration_ms
+        self._set_state(State.DETER)
+        self._sink.fire_granted(now)
+        self._sink.effector_on(now)
+        self._send_event(EffectorEventMessage(EffectorEvent.ON, 0))
+        return Reply.granted(now)
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

@@ -10,6 +10,7 @@ the device leaves ZONE_SETUP by any route. Only an accepted commit turns it into
 stored zone.
 """
 
+import struct
 from dataclasses import dataclass, field
 
 from deterrent.clock import elapsed_ms
@@ -146,6 +147,24 @@ class ZoneService:
             return len(self._storage.read_all())
         except StorageError:
             return 0
+
+    def polygons(self) -> tuple[tuple[tuple[int, int], ...], ...]:
+        """Every stored zone as a polygon of (pan, tilt) points. Empty if storage is unreadable.
+
+        Only meaningful when ``store_valid()`` is true; a fire decision checks that first.
+        """
+        try:
+            zones = self._storage.read_all()
+        except StorageError:
+            return ()
+        return tuple(
+            tuple(
+                struct.unpack_from("<hh", zone.points, 4 * index)
+                for index in range(zone.point_count)
+            )
+            for zone in zones
+            if len(zone.points) == 4 * zone.point_count
+        )
 
     def list_entries(self) -> list[ZoneEntry] | None:
         """(id, point count, stored CRC) of every zone, or None if storage is unreadable."""

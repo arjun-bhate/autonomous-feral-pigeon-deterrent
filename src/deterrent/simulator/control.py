@@ -133,12 +133,18 @@ class SimulatorControl:
             if "zones" in fields:
                 has_zone = bool(fields["zones"])
             else:  # not named: a fresh start has none, a mid-scenario change keeps what is stored
-                has_zone = not resets_zones and bool(self._device.storage.read_all())
+                has_zone = not resets_zones and bool(self._stored_zone_ids())
             if not has_zone:
                 raise ValueError("zone_store_corrupt needs at least one stored zone")
         remaining = fields.get("cooldown_remaining_ms")
         if remaining is not None and not 0 <= remaining <= self._device.settings.cooldown_ms:
             raise ValueError("cooldown_remaining_ms must be between 0 and cooldown_ms")
+
+    def _stored_zone_ids(self) -> list[int]:
+        storage = self._device.storage
+        if isinstance(storage, MockZoneStorage):
+            return storage.stored_ids()
+        return [zone.zone_id for zone in storage.read_all()]
 
     # ---- applying ------------------------------------------------------------------------------
 
@@ -190,9 +196,16 @@ class SimulatorControl:
                     )
                 )
         if fields.get("zone_store_corrupt"):
-            for zone in storage.read_all():
-                damaged = bytes([zone.points[0] ^ 0x01]) + zone.points[1:]
-                storage.write_zone(StoredZone(zone.zone_id, zone.crc32, zone.point_count, damaged))
+            if isinstance(storage, MockZoneStorage):
+                # Works in every failure mode: stored bytes can be damaged while unreadable.
+                for zone_id in storage.stored_ids():
+                    storage.corrupt_zone(zone_id)
+            else:
+                for zone in storage.read_all():
+                    damaged = bytes([zone.points[0] ^ 0x01]) + zone.points[1:]
+                    storage.write_zone(
+                        StoredZone(zone.zone_id, zone.crc32, zone.point_count, damaged)
+                    )
         if fields.get("zone_storage_unreadable") and isinstance(storage, MockZoneStorage):
             storage.mode = StorageMode.UNREADABLE
 

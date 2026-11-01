@@ -177,6 +177,24 @@ def test_zone_storage_unreadable_switches_the_mock_mode():
     assert harness.storage.mode is StorageMode.OK
 
 
+def test_the_store_can_be_corrupted_while_storage_is_unreadable_and_stays_corrupt_afterwards():
+    harness = fresh()
+    harness.control.apply_initial({"zones": [SQUARE]})
+    harness.control.inject({"zone_storage_unreadable": True})
+    harness.control.inject({"zone_store_corrupt": True})  # bytes damaged while unreadable
+    assert harness.storage.mode is StorageMode.UNREADABLE  # the mode is not changed by it
+    harness.control.inject({"zone_storage_unreadable": False})
+    assert harness.device.zones.store_valid() is False  # the checksums no longer match
+    assert harness.device.fault_mask == 0
+
+
+def test_corrupting_while_unreadable_still_needs_a_stored_zone():
+    harness = fresh()
+    harness.control.apply_initial({"zone_storage_unreadable": True})
+    with pytest.raises(ValueError):
+        harness.control.inject({"zone_store_corrupt": True})
+
+
 def test_cooldown_remaining_ms_starts_a_running_cooldown_with_that_much_left():
     harness = fresh()
     harness.control.apply_initial({"cooldown_remaining_ms": 3000})

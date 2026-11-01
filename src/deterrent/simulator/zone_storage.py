@@ -93,6 +93,11 @@ class MockZoneStorage(ZoneStorage):
         self._require_changeable()
         self._zones.clear()
 
+    def stored_ids(self) -> list[int]:
+        """The ids held in memory, whatever the failure mode (test use: bytes can be
+        damaged while the storage is unreadable, and the test interface must see that)."""
+        return list(self._zones)
+
     def corrupt_zone(self, zone_id: int) -> None:
         """Damage the stored bytes of one zone without touching its stored CRC."""
         zone = self._zones[zone_id]

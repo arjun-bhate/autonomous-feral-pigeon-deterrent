@@ -152,6 +152,11 @@ class Device:
     def now_ms(self) -> int:
         return self._clock.now_ms()
 
+    @property
+    def test_injection_allowed(self) -> bool:
+        """True only if this device was built for tests; see ``SimulatorControl``."""
+        return self._allow_test_injection
+
     def handle_bytes(self, data: bytes) -> list[bytes]:
         """Feed received bytes; returns the wire frames the device sends in response."""
         for item in self._reader.feed(data):

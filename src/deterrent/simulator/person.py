@@ -76,6 +76,12 @@ class PersonTimers:
         self._last_rx_ms = now_ms
         self._person_clear = person_clear
 
+    def restore(self, snapshot: PersonSnapshot) -> None:
+        """Set the remembered values directly. Used only by the test-only injection interface."""
+        self._last_rx_ms = snapshot.last_rx_ms
+        self._person_clear = snapshot.person_clear
+        self._clear_since_ms = snapshot.clear_since_ms
+
     def restart(self) -> None:
         """Discard the clear period (heartbeat loss, SAFE_ERROR recovery). The next accepted
         clear heartbeat begins a new one; the delay applies again until then."""

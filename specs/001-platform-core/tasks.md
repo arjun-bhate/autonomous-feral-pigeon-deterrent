@@ -207,7 +207,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-050, FR-015, FR-049, SC-022, SC-021
   - **Depends**: T026
 
-- [ ] T028 [US6] Extend `control.py` with the test-only state-injection interface used by scenario vectors (`apply_initial`, and `inject` for mid-vector changes): it can set inputs and state (state, homed, armed, key, angles, heartbeat age, person status, clear streak, zones, `zone_store_corrupt`, `zone_storage_unreadable`, `cooldown_remaining_ms`, `fault_mask`, `last_seq`) but has no way to produce a grant or switch the effector on. Enabled only when the device is built with test injection allowed; otherwise every call is refused.
+- [X] T028 [US6] Extend `control.py` with the test-only state-injection interface used by scenario vectors (`apply_initial`, and `inject` for mid-vector changes): it can set inputs and state (state, homed, armed, key, angles, heartbeat age, person status, clear streak, zones, `zone_store_corrupt`, `zone_storage_unreadable`, `cooldown_remaining_ms`, `fault_mask`, `last_seq`) but has no way to produce a grant or switch the effector on. Enabled only when the device is built with test injection allowed; otherwise every call is refused.
   - **Tests first**: `tests/unit/test_control_inject.py`: every initial field takes effect; injecting a state never creates a GRANTED reply by itself (a request is still needed); no setter for the effector exists; with injection disabled the calls raise and change nothing; `set_key` on-to-off from an injected armed state follows the key-off rule.
   - **Covers**: FR-021, FR-019, FR-039, FR-042
   - **Depends**: T027

@@ -110,7 +110,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Drive the simulator with test messages and a FakeClock only; no dashboard, no database other than the device's own zone file.
 
-- [ ] T012 [P] [US6] Create `src/deterrent/simulator/events.py`: `DeviceEventSink` interface (state/angle changes, rejects with cause, effector on/normal end/cut with cause/stopped by host, interlock event, homing drift, fire granted/denied with reason) and a `RecordingSink` for tests. No imports from `observability`, `api` or `composition`.
+- [X] T012 [P] [US6] Create `src/deterrent/simulator/events.py`: `DeviceEventSink` interface (state/angle changes, rejects with cause, effector on/normal end/cut with cause/stopped by host, interlock event, homing drift, fire granted/denied with reason) and a `RecordingSink` for tests. No imports from `observability`, `api` or `composition`.
   - **Tests first**: `tests/unit/test_device_events.py`: RecordingSink keeps events in order with the device time; module imports no forbidden package (simple import check).
   - **Covers**: FR-044, FR-011, FR-021
   - **Depends**: T004, T007

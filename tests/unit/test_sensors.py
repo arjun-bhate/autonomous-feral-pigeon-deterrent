@@ -310,3 +310,150 @@ def test_a_faultable_provider_refuses_an_unknown_mode():
 
     with pytest.raises(ValueError):
         FaultableProvider(MockSensorProvider("cpu_load", 1.0)).fail("melt")
+
+
+# ---- fixes found on the first real run (T057/T058) ----
+
+
+def test_cpu_load_does_not_depend_on_psutils_per_thread_memory():
+    """psutil remembers the last reading per thread, and every sensor read runs in a new thread.
+
+    cpu_percent(interval=None) would therefore always answer 0.0. The sensor must measure over a
+    short window inside the call instead.
+    """
+    seen = {}
+
+    def cpu_percent(interval=None):
+        seen["interval"] = interval
+        return 23.0
+
+    assert CpuLoadSensor(fake_psutil(cpu_percent=cpu_percent)).read() == 23.0
+    assert seen["interval"] is not None and 0 < seen["interval"] <= 0.5
+
+
+def test_cpu_load_is_not_zero_when_read_from_a_fresh_thread_on_a_busy_cpu():
+    import psutil
+
+    stop = threading.Event()
+    burners = [
+        threading.Thread(target=lambda: [None for _ in iter(stop.is_set, True)]) for _ in range(2)
+    ]
+    for burner in burners:
+        burner.start()
+    try:
+        results: list[float | None] = []
+        thread = threading.Thread(target=lambda: results.append(CpuLoadSensor(psutil).read()))
+        thread.start()
+        thread.join(timeout=5)
+    finally:
+        stop.set()
+    assert results and results[0] is not None and results[0] > 0.0
+
+
+def test_nvml_can_be_started_ahead_of_the_first_read_without_blocking_the_caller():
+    nvml = FakeNvml()
+    release = threading.Event()
+    original = nvml.nvmlInit
+
+    def slow_init():
+        release.wait(5)  # a driver that takes a long time to start
+        original()
+
+    nvml.nvmlInit = slow_init
+    source = NvmlSource(lambda: nvml)
+    started = time.perf_counter()
+    thread = source.warm_up()
+    assert time.perf_counter() - started < 0.5  # warm_up returns at once
+    release.set()
+    thread.join(timeout=5)
+    started = time.perf_counter()
+    assert GpuLoadSensor(source).read() == 40
+    assert time.perf_counter() - started < 0.5
+    assert nvml.init_calls == 1  # the warm-up connection was reused, not repeated
+
+
+def test_a_failed_warm_up_does_not_raise_and_a_later_read_still_tries_again():
+    calls = {"n": 0}
+    nvml = FakeNvml()
+
+    def flaky_loader():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ImportError("not yet")
+        return nvml
+
+    source = NvmlSource(flaky_loader)
+    source.warm_up().join(timeout=5)
+    assert GpuLoadSensor(source).read() == 40
+
+
+def test_the_default_gpu_providers_start_nvml_in_the_background(monkeypatch):
+    started = []
+    monkeypatch.setattr(NvmlSource, "warm_up", lambda self: started.append(self))
+    default_providers()
+    assert len(started) == 1  # one shared source, warmed once
+
+
+class SampleNvml(FakeNvml):
+    """An NVML whose plain utilization query fails (as an idle switchable GPU's often does)."""
+
+    NVML_GPU_UTILIZATION_SAMPLES = 1
+
+    def __init__(self, *, samples=(30, 55), rates_fail_times=999, samples_fail_times=0, **kw):
+        super().__init__(**kw)
+        self.samples = samples
+        self.rates_left = rates_fail_times
+        self.samples_left = samples_fail_times
+        self.rates_calls = 0
+
+    def nvmlDeviceGetUtilizationRates(self, handle):
+        self.rates_calls += 1
+        if self.rates_left > 0:
+            self.rates_left -= 1
+            raise RuntimeError("NVML_ERROR_UNKNOWN")
+        return SimpleNamespace(gpu=self.load)
+
+    def nvmlDeviceGetSamples(self, handle, kind, since):
+        if self.samples_left > 0:
+            self.samples_left -= 1
+            raise RuntimeError("NVML_ERROR_NOT_FOUND")
+        values = [
+            SimpleNamespace(timeStamp=1000 + i, sampleValue=SimpleNamespace(uiVal=v))
+            for i, v in enumerate(self.samples)
+        ]
+        return (0, list(reversed(values)))  # newest first, to prove it picks by timestamp
+
+
+def test_gpu_load_falls_back_to_the_latest_sample_when_the_plain_query_fails():
+    source = NvmlSource(lambda: SampleNvml(samples=(30, 55)))
+    assert GpuLoadSensor(source).read() == 55  # the newest sample, not the first in the list
+
+
+def test_gpu_load_tries_once_more_when_both_ways_fail_the_first_time():
+    nvml = SampleNvml(samples_fail_times=1)
+    source = NvmlSource(lambda: nvml)
+    assert GpuLoadSensor(source).read() == 55
+    assert nvml.rates_calls == 2  # the plain query was tried again on the second round
+
+
+def test_gpu_load_is_unavailable_only_when_every_attempt_fails():
+    nvml = SampleNvml(samples_fail_times=99)
+    assert GpuLoadSensor(NvmlSource(lambda: nvml)).read() is None
+
+
+def test_a_sample_outside_0_to_100_is_unavailable():
+    assert GpuLoadSensor(NvmlSource(lambda: SampleNvml(samples=(250,)))).read() is None
+
+
+def test_the_plain_query_is_used_first_when_it_works():
+    nvml = SampleNvml(rates_fail_times=0, load=12)
+    assert GpuLoadSensor(NvmlSource(lambda: nvml)).read() == 12
+    assert nvml.rates_calls == 1
+
+
+def test_warm_up_also_makes_the_slow_first_load_query_ahead_of_time():
+    nvml = SampleNvml(rates_fail_times=0, load=9)
+    source = NvmlSource(lambda: nvml)
+    source.warm_up().join(timeout=5)
+    assert nvml.rates_calls == 1  # the wake-up query was made during warm-up
+    assert GpuLoadSensor(source).read() == 9

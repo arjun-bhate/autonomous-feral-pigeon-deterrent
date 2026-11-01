@@ -19,6 +19,7 @@ proven to cope with each.
 import importlib
 import math
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -34,6 +35,9 @@ UNAVAILABLE = "unavailable"
 
 _TEMP_RANGE = (-50.0, 150.0)
 _CPU_TEMP_SOURCES = ("coretemp", "k10temp", "zenpower", "cpu_thermal", "cpu-thermal")
+_LOAD_ROUNDS = 2  # attempts at reading the GPU load before giving up
+_LOAD_RETRY_PAUSE_S = 0.05
+_CPU_WINDOW_S = 0.1  # how long the CPU load is measured for
 _HANG_LIMIT_S = 30.0  # a mock that hangs lets go after this long, so a test cannot stall forever
 
 
@@ -137,17 +141,21 @@ def _psutil() -> Any:
 
 
 class CpuLoadSensor(_Named):
+    """CPU use over a short measuring window.
+
+    psutil's no-wait mode (``interval=None``) compares with the previous call *made from the
+    same thread*. The collector reads every sensor in a fresh thread, so that mode would always
+    answer 0.0. Measuring over a short window inside the call works from any thread; the read
+    happens in a worker thread, so the wait holds nothing up.
+    """
+
     def __init__(self, psutil_module: Any = None) -> None:
         super().__init__("cpu_load")
         self._psutil = psutil_module if psutil_module is not None else _psutil()
-        try:
-            self._psutil.cpu_percent(interval=None)  # the first call has nothing to compare with
-        except Exception:  # noqa: S110
-            pass
 
     def read(self) -> float | None:
         try:
-            return _percent(self._psutil.cpu_percent(interval=None))
+            return _percent(self._psutil.cpu_percent(interval=_CPU_WINDOW_S))
         except Exception:
             return None
 
@@ -201,6 +209,24 @@ class NvmlSource:
         self._nvml: Any = None
         self._handle: Any = None
 
+    def warm_up(self) -> threading.Thread:
+        """Start the NVIDIA driver connection in the background.
+
+        The first connection and the first load query can take over a second together, longer
+        than the collector waits for a read, so the very first GPU readings would time out.
+        Starting it ahead of time moves that wait out of the timed path. A failure here is
+        silent; a later read tries again.
+        """
+
+        def connect() -> None:
+            if self.load() is None:  # connects, and makes the slow first query
+                with self._lock:
+                    self._connect()
+
+        thread = threading.Thread(target=connect, name="nvml-warm-up", daemon=True)
+        thread.start()
+        return thread
+
     def _connect(self) -> bool:
         if self._handle is not None:
             return True
@@ -217,13 +243,33 @@ class NvmlSource:
             return False
 
     def load(self) -> float | None:
+        """GPU load. On laptops with switchable graphics the plain query often fails with
+        "unknown error" while the GPU idles, so each round tries the plain query, then the
+        newest entry of the driver's utilization samples, and the whole round is repeated once
+        after a short pause. Only if every attempt fails is the load unavailable."""
         with self._lock:
             if not self._connect():
                 return None
-            try:
-                return _percent(self._nvml.nvmlDeviceGetUtilizationRates(self._handle).gpu)
-            except Exception:
-                return None
+            for attempt in range(_LOAD_ROUNDS):
+                if attempt:
+                    time.sleep(_LOAD_RETRY_PAUSE_S)
+                for ask in (self._plain_load, self._latest_sample_load):
+                    try:
+                        value = _percent(ask())
+                    except Exception:
+                        continue
+                    if value is not None:
+                        return value
+            return None
+
+    def _plain_load(self) -> Any:
+        return self._nvml.nvmlDeviceGetUtilizationRates(self._handle).gpu
+
+    def _latest_sample_load(self) -> Any:
+        _kind, samples = self._nvml.nvmlDeviceGetSamples(
+            self._handle, self._nvml.NVML_GPU_UTILIZATION_SAMPLES, 0
+        )
+        return max(samples, key=lambda sample: sample.timeStamp).sampleValue.uiVal
 
     def temperature(self) -> float | None:
         with self._lock:
@@ -299,6 +345,7 @@ class FaultableProvider:
 def default_providers() -> list[SensorProvider]:
     """The five real providers (a GPU or temperature sensor that is missing reads unavailable)."""
     nvml = NvmlSource()
+    nvml.warm_up()
     return [
         CpuLoadSensor(),
         GpuLoadSensor(nvml),

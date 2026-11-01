@@ -147,7 +147,7 @@
     {
       "id": "duration.above_per_shot_denied",
       "description": "The request asks for 5001 ms, one more than per_shot_ms; every other condition holds.",
-      "covers": ["deny:ON_TIME_LIMIT", "codes:DIFFERS_FROM_PRIORITY"],
+      "covers": ["deny:ON_TIME_LIMIT", "codes:DIFFERS_FROM_PRIORITY", "duration:RANGE"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
       "steps": [
@@ -547,6 +547,414 @@
         {"at_ms": 6100, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}}
       ],
       "expect": {"state": "DISARMED", "armed": false, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}
+    },
+    {
+      "id": "duration.below_min_is_field_range",
+      "description": "duration_ms 499 and 0 (the old 'hold' value) are rejected FIELD_RANGE, not denied; the effector never comes on; a request with 500 is then granted.",
+      "covers": ["duration:RANGE", "duration:NO_HOLD"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 499}}, "expect_reply": {"result": "REJECTED", "code": "FIELD_RANGE"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 0}}, "expect_reply": {"result": "REJECTED", "code": "FIELD_RANGE"}},
+        {"at_ms": 150, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false, "events": []}},
+        {"at_ms": 200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "events": [{"event": "on", "at_ms": 200}]}
+    },
+    {
+      "id": "duration.min_accepted",
+      "description": "The shortest shot, 500 ms, is granted and ends by itself at 500 ms with a normal end; no interlock event.",
+      "covers": ["duration:RANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 499, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 500, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 500}], "counters": {"interlock.total": 0}}}
+      ],
+      "expect": {"state": "COOLDOWN", "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 500}], "counters": {"interlock.total": 0}}
+    },
+    {
+      "id": "duration.max_accepted",
+      "description": "The longest shot, 5000 ms (per_shot_ms), is granted and ends by itself at 5000 ms with a normal end; no interlock event.",
+      "covers": ["duration:RANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 4999, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 5000, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 5000}], "counters": {"interlock.total": 0}}}
+      ],
+      "expect": {"state": "COOLDOWN", "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 5000}], "counters": {"interlock.total": 0}}
+    },
+    {
+      "id": "duration.per_shot_configurable",
+      "description": "With per_shot_ms 3000 a request for 3001 ms is denied ON_TIME_LIMIT and nothing happens; a request for 3000 ms is granted.",
+      "covers": ["timing:per_shot_ms", "deny:ON_TIME_LIMIT", "duration:RANGE"],
+      "config": {"per_shot_ms": 3000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 100, "every_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 3001}}, "expect_reply": {"result": "DENIED", "code": "ON_TIME_LIMIT"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false, "events": []}},
+        {"at_ms": 100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 3000}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "duration.step_not_checked",
+      "description": "750 ms is not a multiple of the dashboard's 500 ms step, but the device does not check the step: granted, and the shot ends at 750 ms.",
+      "covers": ["duration:NO_STEP_CHECK"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 750}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 750}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 749, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 750, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 750}]}}
+      ],
+      "expect": {"state": "COOLDOWN", "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 750}]}
+    },
+    {
+      "id": "duration.shot_ends_at_max",
+      "description": "A 1500 ms shot is still on at 1499 ms; at 1500 ms it ends with a normal end, the effector is off and the state is COOLDOWN; no interlock event.",
+      "covers": ["duration:SHOT_END"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 1500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1499, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 1500, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 1500}], "counters": {"interlock.total": 0}}}
+      ],
+      "expect": {"state": "COOLDOWN", "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 1500}], "counters": {"interlock.total": 0}}
+    },
+    {
+      "id": "cooldown.after_normal_end",
+      "description": "A 500 ms shot ends at 500 ms: COOLDOWN with the effector off from 500 to 5499 ms, SCANNING again at 5500 ms (cooldown_ms 5000).",
+      "covers": ["cooldown:START_NORMAL_END", "timing:cooldown_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 499, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 500, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false}},
+        {"at_ms": 5499, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false}},
+        {"at_ms": 5500, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false}}
+      ],
+      "expect": {"state": "SCANNING", "armed": true, "fault_mask": []}
+    },
+    {
+      "id": "cooldown.boundary_exact",
+      "description": "A shot ends normally at E = 500. A request 1 ms before E + cooldown_ms (5499) is denied COOLDOWN_ACTIVE; at exactly E + cooldown_ms (5500) it is granted.",
+      "covers": ["cooldown:BOUNDARY", "timing:cooldown_ms", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 5499, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 5500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.boundary_exact_unaligned_ticks",
+      "description": "Same boundary, but the shot starts at 5 ms and an expectation step at 253 ms shifts the device's tick times: the shot still ends at E = 505 and the cooldown is counted from E (denied at 5504, granted at 5505), not from the tick that noticed the end.",
+      "covers": ["cooldown:BOUNDARY", "timing:cooldown_ms", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5500, "every_ms": 100}, {"from_ms": 5505, "until_ms": 5505}],
+      "steps": [
+        {"at_ms": 5, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 253, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 5504, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 5505, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.after_person_cut",
+      "description": "A person cuts a shot at 100 ms; the cooldown counts from the cut. The re-engage delay (1000) is long over by 5099, so only the cooldown fails then: denied COOLDOWN_ACTIVE at 5099, granted at 5100.",
+      "covers": ["cooldown:START_CUT", "person:CUT", "timing:cooldown_ms"],
+      "config": {"person_reengage_delay_ms": 1000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 0}, {"from_ms": 300, "until_ms": 5100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 150, "action": "expect", "expect": {"state": "COOLDOWN", "armed": true, "fault_mask": [], "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "PERSON_NOT_CLEAR", "within_ms": 100}]}},
+        {"at_ms": 5099, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 5100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.disarm_cut_starts_timer",
+      "description": "DISARM cuts a running shot at 1000 ms and starts the cooldown, which keeps running while DISARMED. After ARM, 1600 ms is still in the cooldown; 6000 ms is not.",
+      "covers": ["cooldown:START_DISARM", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 6000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1000, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "DISARMED", "armed": false, "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "NOT_ARMED", "within_ms": 100}]}},
+        {"at_ms": 1500, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1550, "action": "expect", "expect": {"state": "SCANNING", "armed": true}},
+        {"at_ms": 1600, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 6000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.not_started_by_safe_error.key_off",
+      "description": "A shot is cut by key off (SAFE_ERROR) and no cooldown starts: after key on and ARM the next request is granted.",
+      "covers": ["cooldown:NO_START_SAFE_ERROR", "key:ANY_STATE"],
+      "config": {"person_reengage_delay_ms": 0},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1600}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 500, "action": "set_key", "on": false},
+        {"at_ms": 600, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "KEY_OFF", "within_ms": 100}]}},
+        {"at_ms": 1000, "action": "set_key", "on": true},
+        {"at_ms": 1100, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "armed": false}},
+        {"at_ms": 1500, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1550, "action": "expect", "expect": {"state": "SCANNING"}},
+        {"at_ms": 1600, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.not_started_by_safe_error.heartbeat_lost",
+      "description": "A shot is cut by heartbeat loss (SAFE_ERROR at 1501 ms) and no cooldown starts: after the heartbeat returns and ARM the next request is granted.",
+      "covers": ["cooldown:NO_START_SAFE_ERROR", "timing:watchdog_ms"],
+      "config": {"person_reengage_delay_ms": 0},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500, "every_ms": 100}, {"from_ms": 2000, "until_ms": 2600, "every_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1500, "action": "expect", "expect": {"state": "DETER", "effector_on": true}},
+        {"at_ms": 1501, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "HEARTBEAT_LOST", "at_ms": 1501}]}},
+        {"at_ms": 2100, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "armed": false}},
+        {"at_ms": 2500, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 2550, "action": "expect", "expect": {"state": "SCANNING"}},
+        {"at_ms": 2600, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "cooldown.disarm_during",
+      "description": "From COOLDOWN with 3000 ms left, DISARM moves the device to DISARMED, armed false: the same as in any other state.",
+      "covers": ["cooldown:DISARM"],
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 3000},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 500, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 500, "action": "expect", "expect": {"state": "DISARMED", "armed": false, "fault_mask": []}}
+      ],
+      "expect": {"state": "DISARMED", "armed": false}
+    },
+    {
+      "id": "cooldown.key_off_during",
+      "description": "From COOLDOWN with 3000 ms left, key off moves it to SAFE_ERROR with fault KEY_OFF: the same as in any other state.",
+      "covers": ["cooldown:KEY_OFF"],
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 3000},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 500, "action": "set_key", "on": false},
+        {"at_ms": 500, "action": "expect", "expect": {"state": "SAFE_ERROR", "armed": false, "fault_mask": ["KEY_OFF"]}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"]}
+    },
+    {
+      "id": "cooldown.heartbeat_lost_during",
+      "description": "From COOLDOWN with 3000 ms left, heartbeat loss past the watchdog moves it to SAFE_ERROR with fault HEARTBEAT_LOST: the same as in any other state.",
+      "covers": ["cooldown:HEARTBEAT_LOST"],
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 3000},
+      "steps": [
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "COOLDOWN"}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "armed": false, "fault_mask": ["HEARTBEAT_LOST"]}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}
+    },
+    {
+      "id": "cooldown.zero_disables",
+      "description": "With cooldown_ms 0 the shot's end leaves COOLDOWN on the same tick: SCANNING at 500 ms and a request at 500 ms is granted; COOLDOWN_ACTIVE is never returned.",
+      "covers": ["cooldown:ZERO", "timing:cooldown_ms"],
+      "config": {"cooldown_ms": 0},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 500, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 500}]}},
+        {"at_ms": 500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "counters": {"fire_denied.COOLDOWN_ACTIVE": 0}}
+    },
+    {
+      "id": "fire.priority.delay_over_cooldown_after_cut",
+      "description": "A person cuts a shot at 100 ms; the delay is 7000 ms and the cooldown 5000 ms, so at 4100 ms both conditions fail and the delay is reported (rung 8 over rung 14).",
+      "covers": ["priority:rung8_over_rung14", "cooldown:START_CUT"],
+      "config": {"person_reengage_delay_ms": 7000, "cooldown_ms": 5000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 0}, {"from_ms": 300, "until_ms": 4100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 100, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 4100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false}
+    },
+    {
+      "id": "fire_stop.ends_shot_starts_cooldown",
+      "description": "FIRE_STOP at 1200 ms ends a running shot: reply OK, event 'stopped by host', effector off, COOLDOWN, still armed, no fault, no cut and no interlock event; nothing happens at 5000. The cooldown is counted from the stop: denied at 6199, granted at 6200.",
+      "covers": ["stop:RUNNING", "stop:STATE_DETER", "cooldown:START_STOP", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 6200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1200, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1250, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "stopped_by_host", "within_ms": 100}], "counters": {"interlock.total": 0}}},
+        {"at_ms": 5000, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "stopped_by_host", "within_ms": 100}]}},
+        {"at_ms": 6199, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 6200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "events": [{"event": "on", "at_ms": 0}, {"event": "stopped_by_host", "within_ms": 100}, {"event": "on", "at_ms": 6200}], "counters": {"interlock.total": 0}}
+    },
+    {
+      "id": "fire_stop.idle_ok_no_change",
+      "description": "FIRE_STOP with no shot running: reply OK, nothing changes (no event, no cooldown); an immediate request is granted.",
+      "covers": ["stop:IDLE", "stop:STATE_SCANNING"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false, "events": [], "armed": true}},
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "events": [{"event": "on", "at_ms": 0}]}
+    },
+    {
+      "id": "fire_stop.in_boot",
+      "description": "FIRE_STOP in BOOT: reply OK, nothing to stop, the state stays BOOT.",
+      "covers": ["stop:ALL_STATES", "stop:STATE_BOOT"],
+      "initial": {"state": "BOOT", "homed": false, "armed": false, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "BOOT", "effector_on": false, "events": []}}
+      ],
+      "expect": {"state": "BOOT"}
+    },
+    {
+      "id": "fire_stop.in_homing",
+      "description": "FIRE_STOP at 1000 ms during HOMING (3000 ms): reply OK and homing still completes at 3000 ms.",
+      "covers": ["stop:ALL_STATES", "stop:STATE_HOMING"],
+      "config": {"homing_duration_ms": 3000},
+      "initial": {"state": "HOMING", "homed": false, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 3000}],
+      "steps": [
+        {"at_ms": 1000, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "HOMING"}},
+        {"at_ms": 2999, "action": "expect", "expect": {"state": "HOMING", "homed": false}},
+        {"at_ms": 3000, "action": "expect", "expect": {"state": "DISARMED", "homed": true}}
+      ],
+      "expect": {"state": "DISARMED", "homed": true, "fault_mask": []}
+    },
+    {
+      "id": "fire_stop.in_disarmed",
+      "description": "FIRE_STOP in DISARMED: reply OK, nothing changes.",
+      "covers": ["stop:ALL_STATES", "stop:STATE_DISARMED"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "DISARMED", "armed": false, "events": []}}
+      ],
+      "expect": {"state": "DISARMED"}
+    },
+    {
+      "id": "fire_stop.in_cooldown",
+      "description": "FIRE_STOP in COOLDOWN with 3000 ms left: reply OK, the remaining time is unchanged (denied 1 ms before the original end, granted at it).",
+      "covers": ["stop:ALL_STATES", "stop:STATE_COOLDOWN", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 3000},
+      "heartbeats": [{"from_ms": 0, "until_ms": 3000}],
+      "steps": [
+        {"at_ms": 1000, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "COOLDOWN", "events": []}},
+        {"at_ms": 2999, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 3000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "fire_stop.in_safe_error",
+      "description": "FIRE_STOP in SAFE_ERROR (key off): reply OK, the fault stays and the state stays SAFE_ERROR.",
+      "covers": ["stop:STATE_SAFE_ERROR"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 300}],
+      "steps": [
+        {"at_ms": 100, "action": "set_key", "on": false},
+        {"at_ms": 200, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 200, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "armed": false}
+    },
+    {
+      "id": "fire_stop.in_zone_setup_upload_untouched",
+      "description": "FIRE_STOP in the middle of a zone upload: reply OK, the state stays ZONE_SETUP, the upload continues and its commit succeeds.",
+      "covers": ["stop:ALL_STATES", "stop:STATE_ZONE_SETUP"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": []},
+      "heartbeats": [{"from_ms": 0, "until_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 7, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 1, "pan_cdeg": 2000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 40, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 2, "pan_cdeg": 1500, "tilt_cdeg": 2000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 50, "action": "send", "message": {"type": "ZONE_COMMIT", "fields": {"crc32_of": {"zone_id": 7, "points": [[1000, 1000], [2000, 1000], [1500, 2000]]}}}, "expect_reply": {"result": "OK"}}
+      ],
+      "expect": {"state": "DISARMED", "zones": [7]}
+    },
+    {
+      "id": "fire_stop.in_zone_setup_idle_timer_not_reset",
+      "description": "FIRE_STOP at 4000 ms does not reset the upload idle timer: with the last upload message at 0 the upload is discarded at 5000 ms and the state is DISARMED at 5100 ms.",
+      "covers": ["stop:ALL_STATES", "stop:STATE_ZONE_SETUP", "timing:zone_upload_timeout_ms"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": []},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 7, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 4000, "action": "send", "message": {"type": "FIRE_STOP", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 4900, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 5100, "action": "expect", "expect": {"state": "DISARMED", "zones": []}}
+      ],
+      "expect": {"state": "DISARMED", "zones": []}
+    },
+    {
+      "id": "fire_stop.duplicate_one_action",
+      "description": "The same FIRE_STOP frame sent twice (sequence 1000): the second reply is the cached OK, there is exactly one 'stopped by host' event and the cooldown still counts from 1200 ms.",
+      "covers": ["stop:DUPLICATE", "seq:DUPLICATE", "deny:COOLDOWN_ACTIVE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 6200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1200, "action": "send", "message": {"type": "FIRE_STOP", "seq": 1000, "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1300, "action": "send", "message": {"type": "FIRE_STOP", "seq": 1000, "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1350, "action": "expect", "expect": {"events": [{"event": "on", "at_ms": 0}, {"event": "stopped_by_host", "within_ms": 100}], "state": "COOLDOWN"}},
+        {"at_ms": 6199, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 6200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "events": [{"event": "on", "at_ms": 0}, {"event": "stopped_by_host", "within_ms": 100}, {"event": "on", "at_ms": 6200}]}
+    },
+    {
+      "id": "fire_stop.bad_length",
+      "description": "A FIRE_STOP with one payload byte is rejected BAD_LENGTH and the shot continues.",
+      "covers": ["stop:BAD_LENGTH", "framing:BAD_LENGTH"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1300}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1200, "action": "send_raw", "hex": "07 21 D0 07 01 18 29 00", "expect_reply": {"result": "REJECTED", "code": "BAD_LENGTH"}},
+        {"at_ms": 1300, "action": "expect", "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}]}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}]}
     }
   ]
 }

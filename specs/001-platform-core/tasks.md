@@ -267,7 +267,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-026, FR-048, FR-035, FR-024, FR-041, SC-010, SC-012, SC-020, SC-017
   - **Depends**: T036, T026
 
-- [ ] T038 [US7] Add the shot-duration, cooldown and FIRE_STOP vectors to `fire_arbitration.json` (contract section 7.6, all listed ids): duration range and no-hold, per-shot configurable, step not checked, shot ends at max; cooldown after normal end, boundary exact, after person cut, after DISARM, not started by SAFE_ERROR, interlocks as in other states, zero disables; FIRE_STOP running, idle, all states (BOOT to COOLDOWN), SAFE_ERROR, ZONE_SETUP, duplicate, bad length.
+- [X] T038 [US7] Add the shot-duration, cooldown and FIRE_STOP vectors to `fire_arbitration.json` (contract section 7.6, all listed ids): duration range and no-hold, per-shot configurable, step not checked, shot ends at max; cooldown after normal end, boundary exact, after person cut, after DISARM, not started by SAFE_ERROR, interlocks as in other states, zero disables; FIRE_STOP running, idle, all states (BOOT to COOLDOWN), SAFE_ERROR, ZONE_SETUP, duplicate, bad length.
   - **Tests first**: `tests/contract/test_vectors.py`; every FIRE_STOP table row has a `stop:STATE_*` tag.
   - **Covers**: FR-049, FR-050, FR-041, FR-048, SC-021, SC-022, SC-020, SC-017
   - **Depends**: T037, T027

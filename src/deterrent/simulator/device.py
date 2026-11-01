@@ -39,6 +39,7 @@ from deterrent.protocol.messages import (
     StatusEvent,
     StatusRequest,
     ZoneBegin,
+    ZoneCommit,
     ZonePoint,
     decode_host_message,
     device_frame,
@@ -118,6 +119,7 @@ class Device:
             Heartbeat: self._on_heartbeat,
             ZoneBegin: self._on_zone_begin,
             ZonePoint: self._on_zone_point,
+            ZoneCommit: self._on_zone_commit,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -440,6 +442,16 @@ class Device:
         if refusal is not None:
             return Reply.rejected(MsgType.ZONE_POINT, refusal)
         return Reply.ok(MsgType.ZONE_POINT)
+
+    def _on_zone_commit(self, message: ZoneCommit) -> Reply:
+        """Check and store the uploaded zone. Every outcome ends the upload (back to DISARMED)."""
+        had_upload = self.zones.upload_active
+        refusal = self.zones.commit(message.crc32)
+        if had_upload and self.state is State.ZONE_SETUP:
+            self._set_state(State.DISARMED)
+        if refusal is not None:
+            return Reply.rejected(MsgType.ZONE_COMMIT, refusal)
+        return Reply.ok(MsgType.ZONE_COMMIT)
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

@@ -14,8 +14,14 @@ from dataclasses import dataclass, field
 
 from deterrent.clock import elapsed_ms
 from deterrent.config import Settings
+from deterrent.geometry.polygon import (
+    has_duplicate_consecutive_points,
+    has_self_crossing,
+    has_zero_area,
+)
 from deterrent.protocol.codes import RejectCode
-from deterrent.simulator.zone_storage import StorageError, ZoneStorage
+from deterrent.protocol.crc import zone_bytes, zone_crc32
+from deterrent.simulator.zone_storage import StorageError, StoredZone, ZoneStorage
 
 _MIN_POINTS = 3
 
@@ -75,6 +81,42 @@ class ZoneService:
             return RejectCode.ZONE_BAD_INDEX
         upload.points.append((pan, tilt))
         upload.last_activity_ms = now_ms
+        return None
+
+    def commit(self, crc32: int) -> RejectCode | None:
+        """Check the finished upload and store it. Returns None on success.
+
+        The checks run in a fixed order and the first failure is returned. Whatever the
+        outcome, the upload is used up; nothing is stored unless every check passes.
+        """
+        upload = self._upload
+        if upload is None:
+            return RejectCode.ZONE_NO_UPLOAD  # 1: an upload exists
+        self._upload = None
+        points = upload.points
+        if len(points) != upload.point_count:
+            return RejectCode.ZONE_INCOMPLETE  # 2: all declared points arrived
+        if zone_crc32(upload.zone_id, points) != crc32:
+            return RejectCode.ZONE_BAD_CHECKSUM  # 3: the CRC-32 matches
+        if len(points) < _MIN_POINTS:
+            return RejectCode.ZONE_TOO_FEW_POINTS  # 4: at least 3 points
+        if has_duplicate_consecutive_points(points) or has_zero_area(points):
+            return RejectCode.ZONE_DEGENERATE  # 5: real polygon
+        if has_self_crossing(points):
+            return RejectCode.ZONE_SELF_CROSSING  # 6: edges do not cross
+        try:
+            stored = self._storage.read_all()
+        except StorageError:
+            return RejectCode.ZONE_STORAGE_ERROR  # cannot check 7 and 8: refuse
+        if any(zone.zone_id == upload.zone_id for zone in stored):
+            return RejectCode.ZONE_DUPLICATE_ID  # 7: id not already stored
+        if len(stored) >= self._settings.max_zones:
+            return RejectCode.ZONE_STORE_FULL  # 8: room for another zone
+        blob = zone_bytes(upload.zone_id, points)[2:]  # the point bytes, without id and count
+        try:
+            self._storage.write_zone(StoredZone(upload.zone_id, crc32, len(points), blob))
+        except StorageError:
+            return RejectCode.ZONE_STORAGE_ERROR  # 9: the write succeeds
         return None
 
     # ---- ending an upload ------------------------------------------------------------------

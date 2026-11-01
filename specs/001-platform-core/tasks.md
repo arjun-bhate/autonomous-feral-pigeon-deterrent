@@ -171,7 +171,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-031, FR-015, FR-032
   - **Depends**: T013, T018, T019b
 
-- [ ] T022 [US6] Add ZONE_COMMIT to `zones.py` and `device.py` with the nine ordered checks (upload exists, all points arrived, CRC-32, at least 3 points, no repeated consecutive points and non-zero area, no self-crossing, id not stored, count below `max_zones`, storage write succeeds). The first failure is returned, nothing is stored on any failure, an accepted commit stores the whole zone in one transaction, and every commit outcome returns the state to DISARMED (exits 1 and 2).
+- [X] T022 [US6] Add ZONE_COMMIT to `zones.py` and `device.py` with the nine ordered checks (upload exists, all points arrived, CRC-32, at least 3 points, no repeated consecutive points and non-zero area, no self-crossing, id not stored, count below `max_zones`, storage write succeeds). The first failure is returned, nothing is stored on any failure, an accepted commit stores the whole zone in one transaction, and every commit outcome returns the state to DISARMED (exits 1 and 2).
   - **Tests first**: `tests/unit/test_zones_commit.py`: valid commit stored and listed; one test per rejection code (`ZONE_NO_UPLOAD`, `ZONE_INCOMPLETE`, `ZONE_BAD_CHECKSUM`, `ZONE_TOO_FEW_POINTS`, `ZONE_DEGENERATE`, `ZONE_SELF_CROSSING`, `ZONE_DUPLICATE_ID`, `ZONE_STORE_FULL`, `ZONE_STORAGE_ERROR`) with the previous zones byte-for-byte unchanged and state DISARMED; when two checks fail only the first is reported; storage `full` and `locked` modes leave the old zones intact.
   - **Covers**: FR-031, FR-032, FR-037, FR-033, SC-011
   - **Depends**: T021, T011, T010, T005, T014

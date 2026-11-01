@@ -325,7 +325,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-009, SC-014
   - **Depends**: T044
 
-- [ ] T048 [P] Create `src/deterrent/observability/metrics.py`: counters, gauges and latency samples written as `metric_events`; nearest-rank percentiles (sort, position `ceil(p/100 x n)`); empty state when no samples; the required metric names and units from data-model.md (laptop CPU/GPU/RAM/temperatures, `e2e_latency_simulated`, `fire_requests_granted`, `fire_requests_denied` by reason, `interlock_events` by cause, `protocol_messages_rejected` by cause, `homing_drift_simulated`).
+- [X] T048 [P] Create `src/deterrent/observability/metrics.py`: counters, gauges and latency samples written as `metric_events`; nearest-rank percentiles (sort, position `ceil(p/100 x n)`); empty state when no samples; the required metric names and units from data-model.md (laptop CPU/GPU/RAM/temperatures, `e2e_latency_simulated`, `fire_requests_granted`, `fire_requests_denied` by reason, `interlock_events` by cause, `protocol_messages_rejected` by cause, `homing_drift_simulated`).
   - **Tests first**: `tests/unit/test_metrics.py`: p50 and p95 equal an independent calculation (plain Python `sorted` and index) on fixed and random samples; no samples gives "empty", never zeros; one sample gives p50 equal p95; counters sum increments per label; every required name exists with its unit; unit is required.
   - **Covers**: FR-010, FR-011, SC-015
   - **Depends**: T044

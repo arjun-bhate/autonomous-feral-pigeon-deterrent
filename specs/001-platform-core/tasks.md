@@ -247,7 +247,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-023, FR-040, FR-041, SC-017
   - **Depends**: T030, T032
 
-- [ ] T034 [US7] Write `protocol/vectors/framing_and_sequence.json`: corrupted CRC, bad framing, truncated, oversize, unknown type (generic `0xFE`), wrong length, field out of range, duplicate (cached reply, one action), duplicate fire request (one grant), stale and out-of-order sequence, sequence wrap, REJECT_NOTICE rate limit, stale or duplicate heartbeat not refreshing the watchdog. Every vector carries `framing:*` or `seq:*` tags.
+- [X] T034 [US7] Write `protocol/vectors/framing_and_sequence.json`: corrupted CRC, bad framing, truncated, oversize, unknown type (generic `0xFE`), wrong length, field out of range, duplicate (cached reply, one action), duplicate fire request (one grant), stale and out-of-order sequence, sequence wrap, REJECT_NOTICE rate limit, stale or duplicate heartbeat not refreshing the watchdog. Every vector carries `framing:*` or `seq:*` tags.
   - **Tests first**: `tests/contract/test_vectors.py` runs the new file (add the vectors, run, watch failures, fix the vectors or file a simulator bug); plus the coverage test in T042 will later require these tags.
   - **Covers**: FR-039, FR-041, FR-029, FR-016, SC-006, SC-007, SC-017
   - **Depends**: T032, T015b

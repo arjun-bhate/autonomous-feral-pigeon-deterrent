@@ -1,4 +1,245 @@
 {
   "protocol_version": "0.1",
-  "vectors": []
+  "vectors": [
+    {
+      "id": "framing.bad_crc_not_acted_on",
+      "description": "A MOVE whose checksum is wrong gets no reply, is counted, and the head does not move.",
+      "covers": ["framing:BAD_CRC"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"}
+      ],
+      "expect": {"pan_cdeg": 0, "counters": {"rejected.BAD_CRC": 1, "wire.reject_notice": 1}}
+    },
+    {
+      "id": "framing.bad_framing_invalid_block",
+      "description": "A block whose first length byte runs past the end of the data is not valid COBS: no reply, counted.",
+      "covers": ["framing:BAD_FRAMING"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "05 01 02 00", "expect_reply": "none"}
+      ],
+      "expect": {"counters": {"rejected.BAD_FRAMING": 1, "wire.reject_notice": 1}}
+    },
+    {
+      "id": "framing.oversize_block",
+      "description": "A block of 66 bytes before the delimiter is longer than any frame may be: BAD_FRAMING, no reply.",
+      "covers": ["framing:OVERSIZE", "framing:BAD_FRAMING"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 00", "expect_reply": "none"}
+      ],
+      "expect": {"counters": {"rejected.BAD_FRAMING": 1}}
+    },
+    {
+      "id": "framing.truncated_frame",
+      "description": "A valid block that decodes to only 4 bytes (a frame needs at least 5) is TRUNCATED: no reply, counted.",
+      "covers": ["framing:TRUNCATED"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "05 30 01 02 03 00", "expect_reply": "none"}
+      ],
+      "expect": {"counters": {"rejected.TRUNCATED": 1, "wire.reject_notice": 1}}
+    },
+    {
+      "id": "framing.garbage_then_valid_frame",
+      "description": "After garbage the receiver resynchronises at the next delimiter and acts on the next good frame.",
+      "covers": ["framing:RESYNC", "framing:BAD_FRAMING"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "AA BB CC 00", "expect_reply": "none"},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 700, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 700, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 700}
+    },
+    {
+      "id": "framing.empty_blocks_are_ignored",
+      "description": "Two delimiters in a row carry no message: no reply, no count, no notice.",
+      "covers": ["framing:EMPTY_BLOCK"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "00 00", "expect_reply": "none"}
+      ],
+      "expect": {"counters": {"rejected.total": 0, "wire.reject_notice": 0}}
+    },
+    {
+      "id": "framing.reject_notice_rate_limited",
+      "description": "Ten corrupted frames: all are counted, but at most 5 REJECT_NOTICE events are sent in any second.",
+      "covers": ["framing:REJECT_NOTICE_RATE", "framing:BAD_CRC"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000}],
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 10, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 20, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 30, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 40, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 50, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 60, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 70, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 999, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"},
+        {"at_ms": 999, "action": "expect", "expect": {"counters": {"wire.reject_notice": 5}}},
+        {"at_ms": 1000, "action": "send_raw", "hex": "03 02 05 02 64 01 01 03 0F 40 00", "expect_reply": "none"}
+      ],
+      "expect": {"counters": {"rejected.BAD_CRC": 10, "wire.reject_notice": 6}, "state": "SCANNING"}
+    },
+    {
+      "id": "framing.unknown_type_generic_reject",
+      "description": "A message type that is not in the catalogue (0x7F) gets the generic reject reply type 0xFE.",
+      "covers": ["framing:UNKNOWN_TYPE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "03 7F 05 03 50 C7 00", "expect_reply": {"result": "REJECTED", "code": "UNKNOWN_TYPE", "data": {"request_type": 127}}}
+      ],
+      "expect": {"counters": {"rejected.UNKNOWN_TYPE": 1}}
+    },
+    {
+      "id": "framing.wrong_payload_length",
+      "description": "A MOVE with 3 payload bytes instead of 4 is rejected BAD_LENGTH and nothing moves.",
+      "covers": ["framing:BAD_LENGTH"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send_raw", "hex": "03 02 05 06 01 02 03 36 C7 00", "expect_reply": {"result": "REJECTED", "code": "BAD_LENGTH"}}
+      ],
+      "expect": {"pan_cdeg": 0}
+    },
+    {
+      "id": "framing.field_out_of_range_boolean",
+      "description": "A heartbeat whose person_clear is 2 (a boolean must be 0 or 1) is rejected FIELD_RANGE.",
+      "covers": ["framing:FIELD_RANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": 2}}, "expect_reply": {"result": "REJECTED", "code": "FIELD_RANGE"}}
+      ]
+    },
+    {
+      "id": "framing.field_out_of_range_ttl_zero",
+      "description": "A fire request with ttl_ms 0 is rejected FIELD_RANGE before any arbitration, so it is not DENIED.",
+      "covers": ["framing:FIELD_RANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 0}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 0, "duration_ms": 500}}, "expect_reply": {"result": "REJECTED", "code": "FIELD_RANGE"}}
+      ],
+      "expect": {"effector_on": false, "state": "SCANNING"}
+    },
+    {
+      "id": "framing.field_out_of_range_ttl_too_long",
+      "description": "A fire request with ttl_ms 5001 (the maximum is 5000) is rejected FIELD_RANGE.",
+      "covers": ["framing:FIELD_RANGE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 0}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 5001, "duration_ms": 500}}, "expect_reply": {"result": "REJECTED", "code": "FIELD_RANGE"}}
+      ],
+      "expect": {"effector_on": false}
+    },
+    {
+      "id": "seq.duplicate_replays_reply_acts_once",
+      "description": "The same sequence number twice: the second time the cached reply is replayed and nothing happens again.",
+      "covers": ["seq:DUPLICATE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 20, "fields": {"pan_cdeg": 1000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 1000, "tilt": 0}}},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "seq": 21, "fields": {"pan_cdeg": 2000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 2000, "tilt": 0}}},
+        {"at_ms": 20, "action": "send", "message": {"type": "MOVE", "seq": 20, "fields": {"pan_cdeg": 1000, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 1000, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 2000}
+    },
+    {
+      "id": "seq.duplicate_fire_request_one_grant",
+      "description": "A fire request sent twice with the same sequence number is granted once; the second reply is the cached grant.",
+      "covers": ["seq:DUPLICATE", "seq:DUPLICATE_FIRE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "seq": 30, "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED", "data": {"granted_on_ms": 0}}},
+        {"at_ms": 100, "action": "send", "message": {"type": "FIRE_REQUEST", "seq": 30, "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED", "data": {"granted_on_ms": 0}}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}], "counters": {"fire_granted": 1}}
+    },
+    {
+      "id": "seq.first_message_accepted_whatever_its_number",
+      "description": "The first message after boot is accepted with any sequence number (here 40000).",
+      "covers": ["seq:FIRST_ACCEPTED"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 40000, "fields": {"pan_cdeg": 300, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 300, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 300}
+    },
+    {
+      "id": "seq.stale_is_rejected",
+      "description": "After sequence 50 was accepted, an older number (40) that was never seen is rejected STALE_SEQ and not acted on.",
+      "covers": ["seq:STALE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 50, "fields": {"pan_cdeg": 100, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 100, "tilt": 0}}},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "seq": 40, "fields": {"pan_cdeg": 900, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}}
+      ],
+      "expect": {"pan_cdeg": 100, "counters": {"rejected.STALE_SEQ": 1}}
+    },
+    {
+      "id": "seq.gap_accepted_out_of_order_rejected",
+      "description": "A gap in the numbers is accepted (10 then 14); a number inside the gap that arrives later (12) is stale.",
+      "covers": ["seq:GAP_ACCEPTED", "seq:OUT_OF_ORDER", "seq:STALE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 10, "fields": {"pan_cdeg": 100, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 100, "tilt": 0}}},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "seq": 14, "fields": {"pan_cdeg": 200, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 200, "tilt": 0}}},
+        {"at_ms": 20, "action": "send", "message": {"type": "MOVE", "seq": 12, "fields": {"pan_cdeg": 300, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "MOVE", "seq": 15, "fields": {"pan_cdeg": 400, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 400, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 400}
+    },
+    {
+      "id": "seq.wrap_around_65535_to_0",
+      "description": "The counter wraps: 65535, 0, 1 are each one step forward and accepted; a repeat of 65535 is a duplicate.",
+      "covers": ["seq:WRAP", "seq:DUPLICATE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "last_seq": 65534},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 65535, "fields": {"pan_cdeg": 100, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 100, "tilt": 0}}},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "seq": 0, "fields": {"pan_cdeg": 200, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 200, "tilt": 0}}},
+        {"at_ms": 20, "action": "send", "message": {"type": "MOVE", "seq": 1, "fields": {"pan_cdeg": 300, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 300, "tilt": 0}}},
+        {"at_ms": 30, "action": "send", "message": {"type": "MOVE", "seq": 65535, "fields": {"pan_cdeg": 100, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 100, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 300}
+    },
+    {
+      "id": "seq.rejected_message_still_uses_its_number",
+      "description": "A message rejected after the sequence check still uses up its number: the same number again replays the rejection.",
+      "covers": ["seq:REJECTED_CACHED", "seq:DUPLICATE"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "MOVE", "seq": 60, "fields": {"pan_cdeg": 30000, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "OUT_OF_SOFT_LIMIT"}},
+        {"at_ms": 10, "action": "send", "message": {"type": "MOVE", "seq": 60, "fields": {"pan_cdeg": 500, "tilt_cdeg": 0}}, "expect_reply": {"result": "REJECTED", "code": "OUT_OF_SOFT_LIMIT"}},
+        {"at_ms": 20, "action": "send", "message": {"type": "MOVE", "seq": 61, "fields": {"pan_cdeg": 500, "tilt_cdeg": 0}}, "expect_reply": {"result": "OK", "data": {"pan": 500, "tilt": 0}}}
+      ],
+      "expect": {"pan_cdeg": 500}
+    },
+    {
+      "id": "seq.stale_heartbeat_does_not_refresh_watchdog",
+      "description": "A stale heartbeat at 600 ms is rejected and does not count: the watchdog still fires 1000 ms after the last good one.",
+      "covers": ["seq:STALE_HEARTBEAT", "seq:STALE", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "HEARTBEAT", "seq": 10, "fields": {"person_clear": true}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 600, "action": "send", "message": {"type": "HEARTBEAT", "seq": 5, "fields": {"person_clear": true}}, "expect_reply": {"result": "REJECTED", "code": "STALE_SEQ"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "SCANNING"}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false}}
+      ]
+    },
+    {
+      "id": "seq.duplicate_heartbeat_does_not_refresh_watchdog",
+      "description": "A heartbeat repeated with the same sequence number gets the cached reply and does not refresh the watchdog.",
+      "covers": ["seq:DUPLICATE_HEARTBEAT", "seq:DUPLICATE", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "HEARTBEAT", "seq": 10, "fields": {"person_clear": true}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 600, "action": "send", "message": {"type": "HEARTBEAT", "seq": 10, "fields": {"person_clear": true}}, "expect_reply": {"result": "OK", "data": {"device_ms": 0, "state": "SCANNING"}}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "SCANNING"}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}}
+      ]
+    }
+  ]
 }

@@ -335,7 +335,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-008, SC-013, SC-015, FR-010
   - **Depends**: T046, T047, T048
 
-- [ ] T050 [P] Create `src/deterrent/link/base.py` (`DeviceLink`: send bytes, receive bytes), `link/inprocess.py` (to the in-process simulator runner) and `link/mock.py` (fault injection: corrupt, duplicate, drop, delay, reorder).
+- [X] T050 [P] Create `src/deterrent/link/base.py` (`DeviceLink`: send bytes, receive bytes), `link/inprocess.py` (to the in-process simulator runner) and `link/mock.py` (fault injection: corrupt, duplicate, drop, delay, reorder).
   - **Tests first**: `tests/unit/test_link.py`: in-process link round-trips a HEARTBEAT; mock link corrupts, duplicates and drops on command and the simulator still rejects, deduplicates and times out correctly (end to end through T029); the link cannot reach arbitration directly.
   - **Covers**: FR-044, SC-006, SC-007, FR-016, FR-029
   - **Depends**: T029

@@ -237,7 +237,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-039, FR-042
   - **Depends**: T001
 
-- [ ] T032 [US7] Create the vector runner `tests/contract/vector_runner.py` and the simulator adapter `tests/contract/simulator_adapter.py` (the `DeviceAdapter` interface: `reset`, `apply_initial`, `send`, `advance_to`, `set_key`, `read_status`, `read_zone_ids`), plus the parametrised test `tests/contract/test_vectors.py` that runs every file in `protocol/vectors/`. The runner owns encoding with the reference encoder, name-to-code resolution through `protocol/reason-codes.json`, comparison and the report; it fails any DENIED reply with code byte 13 or any cut with cause 13 in every vector.
+- [X] T032 [US7] Create the vector runner `tests/contract/vector_runner.py` and the simulator adapter `tests/contract/simulator_adapter.py` (the `DeviceAdapter` interface: `reset`, `apply_initial`, `send`, `advance_to`, `set_key`, `read_status`, `read_zone_ids`), plus the parametrised test `tests/contract/test_vectors.py` that runs every file in `protocol/vectors/`. The runner owns encoding with the reference encoder, name-to-code resolution through `protocol/reason-codes.json`, comparison and the report; it fails any DENIED reply with code byte 13 or any cut with cause 13 in every vector.
   - **Tests first**: `tests/contract/test_vector_runner.py`: a tiny hand-written vector passes against the simulator adapter; the same vector fails against a deliberately wrong fake adapter (so the runner can fail); a vector writing a reason number is refused; retired code 13 in a reply fails the run; failure output names the vector id and the first mismatch.
   - **Covers**: FR-040, FR-042, FR-039, SC-017
   - **Depends**: T028, T031, T030

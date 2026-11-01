@@ -80,15 +80,20 @@ Note: this start state is unreachable through normal commands (armed with the ke
 ```text
 DeviceAdapter
   reset(config)            -> start a fresh device with these named values
-  apply_initial(initial)   -> put the device in the starting situation (test-only)
+  apply_initial(initial)   -> put the device in the starting situation (test-only); returns frames sent
+  inject(fields)           -> change only the named fields mid-vector (test-only); returns frames sent
   send(bytes)              -> list of reply/event frames received before the next step
-  advance_to(at_ms)        -> let device time reach at_ms (simulator: FakeClock; firmware: real waiting)
-  set_key(on)              -> change the key input
+  advance_to(at_ms)        -> let device time reach at_ms (simulator: FakeClock; firmware: real waiting);
+                              ticks the device at least every 10 ms and exactly at at_ms; returns the
+                              frames sent meanwhile, each with the device time it was sent
+  set_key(on)              -> change the key input; returns frames sent
   read_status()            -> the status block
   read_zone_ids()          -> zone ids stored (via ZONE_LIST)
+  read_counters()          -> optional, simulator only: interlock.<CAUSE>, rejected.<CODE>,
+                              fire_denied.<REASON>, homing_drift ...; None if the device cannot report them
 ```
 
-The runner is written once (in this repository) and owns the encoder/decoder, the comparison and the report. A firmware harness supplies only the adapter. Timing-sensitive vectors use the `config` section to shorten waits where firmware allows.
+The runner is written once (in this repository, `tests/contract/vector_runner.py`) and owns the encoder/decoder, the comparison and the report. Event times: an `events` item may carry `at_ms` (the exact device time) or `within_ms` (at most that long after the most recent explicit `send`, `send_raw`, `set_key` or `inject` step, not counting scheduled heartbeats). The `events` list is the complete ordered list of `EFFECTOR_EVENT`s sent so far. A counter named `wire.reject_notice` counts `REJECT_NOTICE` events and is counted by the runner itself. A firmware harness supplies only the adapter. Timing-sensitive vectors use the `config` section to shorten waits where firmware allows.
 
 ## 5. Rules for authors
 

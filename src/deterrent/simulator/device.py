@@ -38,6 +38,8 @@ from deterrent.protocol.messages import (
     StatusBlock,
     StatusEvent,
     StatusRequest,
+    ZoneBegin,
+    ZonePoint,
     decode_host_message,
     device_frame,
     pack_angles,
@@ -46,6 +48,7 @@ from deterrent.protocol.messages import (
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.person import PersonCheck, PersonSnapshot, PersonTimers, evaluate_person
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
+from deterrent.simulator.zones import ZoneService
 
 Handler = Callable[[HostMessage], Reply]
 
@@ -86,6 +89,7 @@ class Device:
         self.effector_on = False
         self.fault_mask = 0
         self.key_on = False
+        self.zones = ZoneService(self.storage, settings)
         self._person = PersonTimers()
         self._heartbeat_seen = False
         self._last_heartbeat_ms = 0
@@ -112,6 +116,8 @@ class Device:
             Arm: self._on_arm,
             Disarm: self._on_disarm,
             Heartbeat: self._on_heartbeat,
+            ZoneBegin: self._on_zone_begin,
+            ZonePoint: self._on_zone_point,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -204,6 +210,7 @@ class Device:
         now = self.now_ms()
         self._check_watchdog(now)
         self._check_recovery()
+        self._check_upload_timeout(now)
         if self.state is State.BOOT:
             if elapsed_ms(now, self._boot_started_ms) >= self._boot_duration_ms:
                 self._homing_started_ms = now
@@ -212,6 +219,13 @@ class Device:
             if elapsed_ms(now, self._homing_started_ms) >= self.settings.homing_duration_ms:
                 self._finish_homing()
         self._send_status_if_due()
+
+    def _check_upload_timeout(self, now: int) -> None:
+        """An upload that has been idle too long is thrown away and the device is DISARMED."""
+        if self.zones.timed_out(now):
+            self.zones.discard()
+            if self.state is State.ZONE_SETUP:
+                self._set_state(State.DISARMED)
 
     def _check_watchdog(self, now: int) -> None:
         """No accepted heartbeat for more than watchdog_ms means the host is gone."""
@@ -229,6 +243,7 @@ class Device:
         if self.state is State.SAFE_ERROR:
             return  # already there; only the extra fault is recorded
         self.armed = False
+        self.zones.discard()
         self._person.restart()
         if self.state is State.HOMING:
             self.homed = False  # homing is abandoned, not resumed
@@ -386,6 +401,7 @@ class Device:
 
     def _on_disarm(self, message: Disarm) -> Reply:
         """Always accepted. In BOOT, HOMING and SAFE_ERROR it changes nothing else."""
+        self.zones.discard()
         if self.state not in (State.BOOT, State.HOMING, State.SAFE_ERROR):
             self.armed = False
             self._set_state(State.DISARMED)
@@ -404,6 +420,26 @@ class Device:
         # After any recovery restart, so this heartbeat itself begins the new clear period.
         self._person.on_heartbeat(now, message.person_clear, self.settings.person_clear_holdoff_ms)
         return Reply.ok(MsgType.HEARTBEAT, pack_heartbeat_data(now, self.state))
+
+    def _on_zone_begin(self, message: ZoneBegin) -> Reply:
+        """Start a zone upload. Rejected begins change nothing, not even a running upload."""
+        if self.state is State.HOMING:
+            return Reply.rejected(MsgType.ZONE_BEGIN, RejectCode.BUSY_HOMING)
+        if not self.homed:
+            return Reply.rejected(MsgType.ZONE_BEGIN, RejectCode.NOT_HOMED)
+        if self.state not in (State.DISARMED, State.ZONE_SETUP):
+            return Reply.rejected(MsgType.ZONE_BEGIN, RejectCode.WRONG_STATE)
+        refusal = self.zones.begin(message.zone_id, message.point_count, self.now_ms())
+        if refusal is not None:
+            return Reply.rejected(MsgType.ZONE_BEGIN, refusal)
+        self._set_state(State.ZONE_SETUP)
+        return Reply.ok(MsgType.ZONE_BEGIN)
+
+    def _on_zone_point(self, message: ZonePoint) -> Reply:
+        refusal = self.zones.point(message.index, message.pan, message.tilt, self.now_ms())
+        if refusal is not None:
+            return Reply.rejected(MsgType.ZONE_POINT, refusal)
+        return Reply.ok(MsgType.ZONE_POINT)
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

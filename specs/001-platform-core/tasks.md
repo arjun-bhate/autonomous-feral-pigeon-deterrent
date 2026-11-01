@@ -340,7 +340,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-044, SC-006, SC-007, FR-016, FR-029
   - **Depends**: T029
 
-- [ ] T051 Create `src/deterrent/link/client.py` (`DeviceClient`): u16 sequence numbers that wrap, request and reply matching, `command_ttl_ms` timeout, time offset between laptop clock and device clock for `issued_at_ms`, heartbeat sender every `heartbeat_interval_ms` with a person-clear provider (default clear), and a decoded reply returned unchanged. The client has no code path that decides or fakes a grant: it only returns what the device replied.
+- [X] T051 Create `src/deterrent/link/client.py` (`DeviceClient`): u16 sequence numbers that wrap, request and reply matching, `command_ttl_ms` timeout, time offset between laptop clock and device clock for `issued_at_ms`, heartbeat sender every `heartbeat_interval_ms` with a person-clear provider (default clear), and a decoded reply returned unchanged. The client has no code path that decides or fakes a grant: it only returns what the device replied.
   - **Tests first**: `tests/unit/test_client.py` (FakeClock, mock link): sequence wraps 65535 to 0; heartbeat sent every 200 ms; no reply within `command_ttl_ms` raises a timeout (used for the `TIMEOUT` span); a DENIED reply is returned as DENIED even when the test tries every other field to look like success; stopping the heartbeat source leads the simulator to SAFE_ERROR after the watchdog; `issued_at_ms` uses the device time base.
   - **Covers**: FR-021, FR-024, FR-025, FR-044, FR-015
   - **Depends**: T050, T004

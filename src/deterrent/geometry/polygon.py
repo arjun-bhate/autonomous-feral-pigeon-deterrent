@@ -5,9 +5,9 @@ only integer arithmetic (no floating point), so the answer is exact: a point is 
 "almost" on an edge because of rounding. The polygon closes by itself: the last
 point connects back to the first.
 
-Part 1 (this file): is the polygon usable at all (no repeated points, non-zero area,
-no edges crossing or touching). Part 2 (point-in-polygon and the safety margin) is
-added by the next task.
+Part 1: is the polygon usable at all (no repeated points, non-zero area, no edges
+crossing or touching). Part 2 (bottom of the file): is a point inside the polygon or
+within the safety margin of its edges.
 """
 
 from collections.abc import Sequence
@@ -103,3 +103,77 @@ def signed_area_x2(points: Sequence[Point]) -> int:
 def has_zero_area(points: Sequence[Point]) -> bool:
     """True if the polygon encloses no area (all points on one line, or all equal)."""
     return signed_area_x2(points) == 0
+
+
+# ---------------------------------------------------------------------------------------
+# Part 2: point in polygon and the safety margin
+# ---------------------------------------------------------------------------------------
+
+BASE_ZONE_MARGIN_CDEG = 50
+
+
+def zone_margin_cdeg(aiming_error_cdeg: int) -> int:
+    """The safety margin around a zone: a fixed 50 plus the simulated aiming error."""
+    if aiming_error_cdeg < 0:
+        raise ValueError("aiming error cannot be negative")
+    return BASE_ZONE_MARGIN_CDEG + aiming_error_cdeg
+
+
+def _on_segment(a: Point, b: Point, p: Point) -> bool:
+    return _cross(a, b, p) == 0 and _within_box(a, b, p)
+
+
+def point_in_polygon(point: Point, polygon: Sequence[Point]) -> bool:
+    """Is ``point`` inside the polygon, by the even-odd rule? The boundary counts as inside.
+
+    Even-odd rule: draw a ray from the point straight to the right and count how many
+    edges it crosses. An odd count means inside. No division is used: whether an
+    edge crosses to the right of the point is decided from the sign of a cross product.
+    """
+    count = len(polygon)
+    if count < 3:
+        raise ValueError("a polygon needs at least 3 points")
+    inside = False
+    for i in range(count):
+        a, b = polygon[i], polygon[(i + 1) % count]
+        if _on_segment(a, b, point):
+            return True
+        # Count the edge only if it straddles the point's height (half-open, so a ray
+        # through a vertex is counted once, not twice).
+        if (a[1] > point[1]) != (b[1] > point[1]):
+            side = _cross(a, b, point)  # sign tells on which side of the edge the point is
+            if (side > 0) == (b[1] > a[1]):
+                inside = not inside
+    return inside
+
+
+def _within_distance_of_segment(p: Point, a: Point, b: Point, distance: int) -> bool:
+    """Is the distance from p to the segment a-b at most ``distance``? Exact, integers only.
+
+    Compares squared distances. When p projects onto the middle of the segment, the
+    squared distance is cross**2 / length**2, so both sides are multiplied by
+    length**2 instead of dividing.
+    """
+    limit = distance * distance
+    abx, aby = b[0] - a[0], b[1] - a[1]
+    apx, apy = p[0] - a[0], p[1] - a[1]
+    length2 = abx * abx + aby * aby
+    along = apx * abx + apy * aby
+    if length2 == 0 or along <= 0:
+        return apx * apx + apy * apy <= limit  # nearest point is a
+    if along >= length2:
+        bpx, bpy = p[0] - b[0], p[1] - b[1]
+        return bpx * bpx + bpy * bpy <= limit  # nearest point is b
+    cross = abx * apy - aby * apx
+    return cross * cross <= limit * length2
+
+
+def in_zone_margin(point: Point, polygon: Sequence[Point], margin_cdeg: int) -> bool:
+    """Is the point inside the zone, or within ``margin_cdeg`` of any of its edges?"""
+    if point_in_polygon(point, polygon):
+        return True
+    count = len(polygon)
+    return any(
+        _within_distance_of_segment(point, polygon[i], polygon[(i + 1) % count], margin_cdeg)
+        for i in range(count)
+    )

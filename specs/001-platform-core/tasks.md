@@ -95,7 +95,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-032, FR-046
   - **Depends**: T001
 
-- [ ] T011 Extend `src/deterrent/geometry/polygon.py` part 2: integer point-in-polygon (even-odd) and the margin test: inside, or squared distance to any edge at most `zone_margin_cdeg` squared, with `zone_margin_cdeg = 50 + aiming_error_cdeg` (default 70).
+- [X] T011 Extend `src/deterrent/geometry/polygon.py` part 2: integer point-in-polygon (even-odd) and the margin test: inside, or squared distance to any edge at most `zone_margin_cdeg` squared, with `zone_margin_cdeg = 50 + aiming_error_cdeg` (default 70).
   - **Tests first**: `tests/unit/test_polygon_margin.py`: inside is in-margin; outside by margin plus 1 is not; exactly at margin distance is in-margin; on a vertex and on an edge; margin follows the aiming error setting (0 and 20); result is identical for translated and rotated-by-90 polygons (property test); no floating point is used.
   - **Covers**: FR-034, FR-046
   - **Depends**: T010, T003

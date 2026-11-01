@@ -242,7 +242,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-040, FR-042, FR-039, SC-017
   - **Depends**: T028, T031, T030
 
-- [ ] T033 [US7] Create `tests/contract/reason_codes_lock.json` (name, code, status pairs of the released protocol version, including retired `RATE_LIMIT` 13) and `tests/contract/test_reason_codes.py` implementing checks 1 to 4, 6 and 7 of scenario-vectors.md section 8 (check 5 needs the vectors and is added by T042).
+- [X] T033 [US7] Create `tests/contract/reason_codes_lock.json` (name, code, status pairs of the released protocol version, including retired `RATE_LIMIT` 13) and `tests/contract/test_reason_codes.py` implementing checks 1 to 4, 6 and 7 of scenario-vectors.md section 8 (check 5 needs the vectors and is added by T042).
   - **Tests first**: the test file itself is the deliverable; also include negative tests on temporary copies: reassigned code fails; removed retired pair fails; `RATE_LIMIT` marked active fails; code 13 given to another name fails; a new reason with code 16 passes and with 14 fails; reordered priorities leave codes unchanged; document and `reason-codes.json` disagreement fails.
   - **Covers**: FR-023, FR-040, FR-041, SC-017
   - **Depends**: T030, T032

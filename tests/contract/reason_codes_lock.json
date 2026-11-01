@@ -1,0 +1,20 @@
+{
+  "protocol_version": "0.1",
+  "reasons": [
+    {"name": "HEARTBEAT_LOST", "code": 1, "status": "active"},
+    {"name": "FAULT_ACTIVE", "code": 2, "status": "active"},
+    {"name": "ZONE_SETUP", "code": 3, "status": "active"},
+    {"name": "NOT_HOMED", "code": 4, "status": "active"},
+    {"name": "KEY_OFF", "code": 5, "status": "active"},
+    {"name": "NOT_ARMED", "code": 6, "status": "active"},
+    {"name": "PERSON_NOT_CLEAR", "code": 7, "status": "active"},
+    {"name": "REQUEST_EXPIRED", "code": 8, "status": "active"},
+    {"name": "ZONE_STORE_INVALID", "code": 9, "status": "active"},
+    {"name": "ELEVATION_LIMIT", "code": 10, "status": "active"},
+    {"name": "IN_ZONE_MARGIN", "code": 11, "status": "active"},
+    {"name": "ON_TIME_LIMIT", "code": 12, "status": "active"},
+    {"name": "RATE_LIMIT", "code": 13, "status": "retired"},
+    {"name": "PERSON_CLEAR_DELAY", "code": 14, "status": "active"},
+    {"name": "COOLDOWN_ACTIVE", "code": 15, "status": "active"}
+  ]
+}

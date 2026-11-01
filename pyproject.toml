@@ -34,7 +34,7 @@ testpaths = [
     "tests/integration",
     "tests/architecture",
 ]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
@@ -45,3 +45,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "PLW1510"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["deterrent", "support"]

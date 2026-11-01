@@ -24,6 +24,7 @@ from deterrent.protocol.messages import (
     unpack_fault_mask,
     unpack_granted_on_ms,
 )
+from deterrent.simulator.device import Device
 from deterrent.simulator.zone_storage import StoredZone
 from support.device_harness import Harness
 
@@ -288,3 +289,161 @@ def test_fire_in_safe_error_is_denied_with_the_failing_condition():
     lost.advance(1001)
     assert lost.device.state is State.SAFE_ERROR
     assert lost.reply(request(lost)) == denied(DenyReason.HEARTBEAT_LOST)
+
+
+# ---- T025b: shot end and cooldown ------------------------------------------------------------
+
+
+def run(harness: Harness, ms: int) -> None:
+    """Move time forward by ms, sending a clear heartbeat every 200 ms so the host stays alive."""
+    remaining = ms
+    while remaining > 0:
+        step = min(200, remaining)
+        harness.advance(step)
+        harness.heartbeat()
+        remaining -= step
+
+
+def grant(harness: Harness, duration_ms: int = 1500):
+    reply = harness.reply(request(harness, duration_ms=duration_ms))
+    assert reply.result is Result.GRANTED, reply
+    return harness.clock.now_ms()
+
+
+def test_the_shot_ends_by_itself_at_its_duration():
+    harness = ready()
+    start = grant(harness, 1500)
+    run(harness, 1499)
+    assert harness.device.effector_on is True
+    assert harness.device.state is State.DETER
+    run(harness, 1)
+    assert harness.clock.now_ms() == start + 1500
+    assert harness.device.effector_on is False
+    assert harness.device.state is State.COOLDOWN
+
+
+def test_the_normal_end_is_reported_once_and_the_effector_is_not_switched_on_again():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 5000)
+    assert [e.event for e in effector_events(harness)] == [
+        EffectorEvent.ON,
+        EffectorEvent.NORMAL_END,
+    ]
+    assert len(harness.sink.named("effector_ended")) == 1
+    assert harness.device.effector_on is False
+
+
+def test_cooldown_state_then_scanning_at_exactly_cooldown_ms():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 500)
+    assert harness.device.state is State.COOLDOWN
+    run(harness, 4999)
+    assert harness.device.state is State.COOLDOWN
+    run(harness, 1)
+    assert harness.device.state is State.SCANNING
+    assert harness.device.armed is True
+
+
+def test_a_request_one_ms_early_is_denied_cooldown_active_and_on_time_is_granted():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 500 + 4999)
+    reply = harness.reply(request(harness))
+    assert reply == denied(DenyReason.COOLDOWN_ACTIVE)
+    assert reply.code == 15
+    assert harness.device.state is State.COOLDOWN
+    harness.advance(1)
+    assert harness.reply(request(harness)).result is Result.GRANTED
+
+
+def test_a_request_in_cooldown_never_turns_the_effector_on():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 1000)
+    assert harness.reply(request(harness)) == denied(DenyReason.COOLDOWN_ACTIVE)
+    assert harness.device.effector_on is False
+
+
+def test_cooldown_zero_disables_it():
+    harness = ready(cooldown_ms=0)
+    grant(harness, 500)
+    run(harness, 500)
+    assert harness.device.state is State.SCANNING  # left COOLDOWN on the same tick
+    assert harness.reply(request(harness, duration_ms=500)).result is Result.GRANTED
+    run(harness, 500)
+    assert harness.reply(request(harness, duration_ms=500)).result is Result.GRANTED
+
+
+def test_the_cooldown_survives_disarm_and_arm():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 500)
+    assert harness.device.cooldown_running() is True
+    harness.reply(Disarm())
+    assert harness.device.cooldown_running() is True
+    harness.reply(Arm())
+    assert harness.device.cooldown_running() is True
+    assert harness.device.state is State.SCANNING
+    assert harness.reply(request(harness)) == denied(DenyReason.COOLDOWN_ACTIVE)
+
+
+def test_the_cooldown_expiry_runs_while_disarmed_with_no_state_change():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 500)
+    harness.reply(Disarm())
+    changes = len(harness.sink.named("state_changed"))
+    events = len(harness.log)
+    run(harness, 5000)
+    assert harness.device.state is State.DISARMED
+    assert harness.device.cooldown_running() is False
+    assert len(harness.sink.named("state_changed")) == changes
+    assert [o for o in harness.log[events:] if o.type == EventType.EFFECTOR_EVENT] == []
+    harness.reply(Arm())
+    assert harness.reply(request(harness)).result is Result.GRANTED
+
+
+def test_only_a_reboot_clears_the_cooldown_timer():
+    harness = ready()
+    grant(harness, 500)
+    run(harness, 500)
+    harness.reply(Disarm())
+    harness.control.set_key(False)  # key change: SAFE_ERROR, cooldown keeps running
+    harness.control.set_key(True)
+    harness.heartbeat()
+    assert harness.device.cooldown_running() is True
+    rebuilt = Device(harness.clock, harness.settings, storage=harness.storage)
+    assert rebuilt.cooldown_running() is False
+
+
+def test_three_5000_ms_shots_at_0_10_and_20_seconds_are_all_granted():
+    harness = ready()
+    for _ in range(3):
+        start = grant(harness, 5000)
+        run(harness, 10_000 - (harness.clock.now_ms() - start))
+        assert harness.clock.now_ms() == start + 10_000
+
+
+def test_a_request_in_safe_error_with_every_recovery_condition_true_runs_recovery_first():
+    harness = ready()
+    harness.control.set_key(False)  # KEY_OFF latched
+    harness.advance(1001)  # and HEARTBEAT_LOST
+    harness.heartbeat()  # a new accepted heartbeat clears HEARTBEAT_LOST
+    assert harness.device.state is State.SAFE_ERROR
+    harness.control.set_key(True)  # key back on, but recovery has not been evaluated yet
+    reply = harness.reply(request(harness))
+    assert harness.device.state is State.DISARMED
+    assert reply == denied(DenyReason.NOT_ARMED)  # not HEARTBEAT_LOST or KEY_OFF
+
+
+def test_safe_error_entry_switches_a_running_effector_off_with_no_cooldown():
+    harness = ready()
+    grant(harness, 5000)
+    harness.advance(1001)  # no heartbeat: the watchdog trips during the shot
+    assert harness.device.state is State.SAFE_ERROR
+    assert harness.device.effector_on is False
+    assert harness.device.cooldown_running() is False
+    cuts = [e for e in effector_events(harness) if e.event is EffectorEvent.CUT]
+    assert [c.cause for c in cuts] == [int(DenyReason.HEARTBEAT_LOST)]

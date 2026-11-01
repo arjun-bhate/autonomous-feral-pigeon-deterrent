@@ -243,6 +243,8 @@ class Device:
         if self.state is State.HOMING:
             if elapsed_ms(now, self._homing_started_ms) >= self.settings.homing_duration_ms:
                 self._finish_homing()
+        self._check_shot_end(now)
+        self._check_cooldown_expiry()
         self._send_status_if_due()
 
     def _check_upload_timeout(self, now: int) -> None:
@@ -265,6 +267,7 @@ class Device:
         """Latch a fault and go to SAFE_ERROR: armed is cleared and the lapse is counted."""
         self.fault_mask |= int(fault)
         self._sink.interlock_event(self.now_ms(), cause)
+        self._cut_effector(cause)  # a running shot stops at once; no cooldown starts
         if self.state is State.SAFE_ERROR:
             return  # already there; only the extra fault is recorded
         self.armed = False
@@ -553,6 +556,40 @@ class Device:
         self._sink.effector_on(now)
         self._send_event(EffectorEventMessage(EffectorEvent.ON, 0))
         return Reply.granted(now)
+
+    def cooldown_running(self) -> bool:
+        """Is a cooldown running? Decided only by the device clock, whatever the state."""
+        return (
+            self._cooldown_started_ms is not None
+            and elapsed_ms(self.now_ms(), self._cooldown_started_ms) < self.settings.cooldown_ms
+        )
+
+    def _cut_effector(self, cause: DenyReason) -> None:
+        """Switch the effector off because a safety condition lapsed. Does nothing if it is off.
+
+        Reports the cut with the lapsed condition's permanent code. What happens next
+        (state, cooldown) depends on the cause and is decided by the caller.
+        """
+        if not self.effector_on:
+            return
+        now = self.now_ms()
+        self.effector_on = False
+        self._sink.effector_cut(now, int(cause))
+        self._send_event(EffectorEventMessage(EffectorEvent.CUT, int(cause)))
+
+    def _check_shot_end(self, now: int) -> None:
+        """A shot ends by itself when its maximum duration is reached; the cooldown starts."""
+        if self.effector_on and elapsed_ms(now, self._shot_started_ms) >= self._shot_duration_ms:
+            self.effector_on = False
+            self._sink.effector_ended(now)
+            self._send_event(EffectorEventMessage(EffectorEvent.NORMAL_END, 0))
+            self._cooldown_started_ms = now
+            self._set_state(State.COOLDOWN)
+
+    def _check_cooldown_expiry(self) -> None:
+        """COOLDOWN returns to SCANNING once the cooldown is over. Other states are left alone."""
+        if self.state is State.COOLDOWN and not self.cooldown_running():
+            self._set_state(State.SCANNING)
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

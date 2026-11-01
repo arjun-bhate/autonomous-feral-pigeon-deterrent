@@ -139,8 +139,7 @@ def test_motion_works_in_scanning_and_zone_setup():
 def test_home_is_wrong_state_outside_disarmed():
     for state in (State.SCANNING, State.DETER, State.COOLDOWN, State.ZONE_SETUP, State.SAFE_ERROR):
         harness = Harness.homed()
-        harness.device.state = state
-        harness.device.fault_mask = 1 if state is State.SAFE_ERROR else 0
+        harness.force_state(state)
         assert harness.reply(Home()) == refused(MsgType.HOME, RejectCode.WRONG_STATE)
         assert harness.device.state is state
 

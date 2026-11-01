@@ -68,6 +68,17 @@ class Harness:
             harness.control.set_key(True)
         return harness
 
+    def force_state(self, state: State) -> None:
+        """Put the device in a state directly, with the bookkeeping that state needs.
+
+        Test-only shortcut for rules that are about one state. It reaches into the
+        device, so use it only where reaching the state by messages would be long.
+        """
+        self.device.state = state
+        self.device.fault_mask = 1 if state is State.SAFE_ERROR else 0
+        if state is State.COOLDOWN:
+            self.device._cooldown_started_ms = self.clock.now_ms()
+
     # ---- sending ---------------------------------------------------------------------------
 
     def _collect(self, frames: list[bytes]) -> list[Out]:

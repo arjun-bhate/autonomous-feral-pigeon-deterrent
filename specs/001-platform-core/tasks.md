@@ -54,7 +54,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-034, FR-036, FR-018
   - **Depends**: T001
 
-- [ ] T004 [P] Create `src/deterrent/clock.py`: `Clock` interface, `SystemClock`, `FakeClock` (manual advance), and a wrap-safe millisecond difference helper for the 32-bit `device_ms` (protocol.md section 1).
+- [X] T004 [P] Create `src/deterrent/clock.py`: `Clock` interface, `SystemClock`, `FakeClock` (manual advance), and a wrap-safe millisecond difference helper for the 32-bit `device_ms` (protocol.md section 1).
   - **Tests first**: `tests/unit/test_clock.py`: FakeClock advances only when told; wrap-safe difference is correct across the 2^32 wrap (hypothesis property); SystemClock is monotonic.
   - **Covers**: FR-044, FR-045, FR-043
   - **Depends**: T001

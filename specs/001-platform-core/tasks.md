@@ -380,7 +380,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Open the Overview with nothing attached; make one sensor unreadable and see only that slot change.
 
-- [ ] T057 [P] [US1] Create `src/deterrent/health/sensors.py`: `SensorProvider` interface, real providers (psutil for CPU load, RAM and CPU temperature where exposed; `nvidia-ml-py` for GPU load and temperature) that return "unavailable" instead of raising when a sensor is missing, and a controllable `MockSensorProvider` (value, error, hang). Names `cpu_load`, `gpu_load`, `ram_used`, `cpu_temp`, `gpu_temp`; units `percent`, `celsius`.
+- [X] T057 [P] [US1] Create `src/deterrent/health/sensors.py`: `SensorProvider` interface, real providers (psutil for CPU load, RAM and CPU temperature where exposed; `nvidia-ml-py` for GPU load and temperature) that return "unavailable" instead of raising when a sensor is missing, and a controllable `MockSensorProvider` (value, error, hang). Names `cpu_load`, `gpu_load`, `ram_used`, `cpu_temp`, `gpu_temp`; units `percent`, `celsius`.
   - **Tests first**: `tests/unit/test_sensors.py`: mock returns values, raises, and hangs on command; real providers are tested only through patched libraries (no hardware): missing temperature attribute gives unavailable, missing NVML gives unavailable; every reading has a unit.
   - **Covers**: FR-001, FR-002, FR-044
   - **Depends**: T001

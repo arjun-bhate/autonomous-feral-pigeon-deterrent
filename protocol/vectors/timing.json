@@ -56,6 +56,230 @@
         {"at_ms": 3100, "action": "expect", "expect": {"state": "DISARMED", "homed": true, "armed": false, "fault_mask": [], "counters": {"homing_drift": 1}}}
       ],
       "expect": {"state": "DISARMED", "homed": true, "armed": false, "fault_mask": [], "counters": {"homing_drift": 1}}
+    },
+    {
+      "id": "timing.heartbeat_interval.default_keeps_alive",
+      "description": "Heartbeats every 200 ms (the default interval) for 10 s keep the device alive: still SCANNING with no fault.",
+      "covers": ["timing:heartbeat_interval_ms", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 10000}],
+      "steps": [
+        {"at_ms": 10000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": [], "armed": true}}
+      ],
+      "expect": {"state": "SCANNING", "fault_mask": []}
+    },
+    {
+      "id": "timing.heartbeat_interval.configured_value_keeps_alive",
+      "description": "With heartbeat_interval_ms 800 (just inside the watchdog) heartbeats at that interval still keep the device alive for 10 s.",
+      "covers": ["timing:heartbeat_interval_ms", "timing:watchdog_ms"],
+      "config": {"heartbeat_interval_ms": 800},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 10000}],
+      "steps": [
+        {"at_ms": 10000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": [], "armed": true}}
+      ],
+      "expect": {"state": "SCANNING", "fault_mask": []}
+    },
+    {
+      "id": "timing.heartbeat_interval.longer_than_watchdog_loses_the_device",
+      "description": "Heartbeats every 1001 ms (one millisecond more than watchdog_ms) are too slow: the device enters SAFE_ERROR at 1001 ms, before the heartbeat due then is handled, and recovers to DISARMED when it arrives.",
+      "covers": ["timing:heartbeat_interval_ms", "timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 1001, "until_ms": 1001, "every_ms": 1001}],
+      "steps": [
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": []}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "armed": false}}
+      ],
+      "expect": {"state": "DISARMED", "armed": false}
+    },
+    {
+      "id": "timing.watchdog.exact_boundary",
+      "description": "Last heartbeat at 0: at 1000 ms (exactly watchdog_ms) the device is still alive; at 1001 ms it has latched HEARTBEAT_LOST and is in SAFE_ERROR.",
+      "covers": ["timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": []}},
+        {"at_ms": 1001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "armed": false}}
+      ],
+      "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}
+    },
+    {
+      "id": "timing.watchdog.heartbeat_at_the_limit_keeps_alive",
+      "description": "Heartbeats exactly watchdog_ms apart (every 1000 ms) keep the device alive: the gap never exceeds the limit.",
+      "covers": ["timing:watchdog_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5000, "every_ms": 1000}],
+      "steps": [
+        {"at_ms": 5000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": []}}
+      ],
+      "expect": {"state": "SCANNING", "fault_mask": []}
+    },
+    {
+      "id": "timing.watchdog.configurable",
+      "description": "With watchdog_ms 300: alive at 300 ms, SAFE_ERROR with HEARTBEAT_LOST at 301 ms.",
+      "covers": ["timing:watchdog_ms"],
+      "config": {"watchdog_ms": 300, "person_clear_holdoff_ms": 300},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 300, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": []}},
+        {"at_ms": 301, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"]}}
+      ],
+      "expect": {"state": "SAFE_ERROR"}
+    },
+    {
+      "id": "timing.watchdog.starts_at_the_first_heartbeat",
+      "description": "Before any heartbeat has been accepted there is nothing to time out: after 5 s the device is still SCANNING with no fault (a fire request is denied HEARTBEAT_LOST instead).",
+      "covers": ["timing:watchdog_ms", "deny:HEARTBEAT_LOST"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "no_heartbeat": true},
+      "steps": [
+        {"at_ms": 5000, "action": "expect", "expect": {"state": "SCANNING", "fault_mask": []}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "HEARTBEAT_LOST"}}
+      ],
+      "expect": {"state": "SCANNING", "fault_mask": []}
+    },
+    {
+      "id": "timing.person_clear_holdoff.fresh_exactly_at_the_limit",
+      "description": "person_clear_holdoff_ms 300, last clear heartbeat at 0: a request at exactly 300 ms still sees a fresh status and is granted.",
+      "covers": ["timing:person_clear_holdoff_ms"],
+      "config": {"person_clear_holdoff_ms": 300},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 300, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "timing.person_clear_holdoff.stale_one_millisecond_later",
+      "description": "Same, but the request comes at 301 ms: the status is stale, so it is denied PERSON_NOT_CLEAR (and the heartbeat is not lost: no fault).",
+      "covers": ["timing:person_clear_holdoff_ms", "deny:PERSON_NOT_CLEAR"],
+      "config": {"person_clear_holdoff_ms": 300},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 301, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_NOT_CLEAR"}}
+      ],
+      "expect": {"state": "SCANNING", "fault_mask": [], "effector_on": false}
+    },
+    {
+      "id": "timing.person_reengage_delay.both_sides",
+      "description": "person_reengage_delay_ms 1000, a person reported until clear heartbeats start at 0: a request at 999 ms is denied PERSON_CLEAR_DELAY, at exactly 1000 ms it is granted.",
+      "covers": ["timing:person_reengage_delay_ms", "deny:PERSON_CLEAR_DELAY"],
+      "config": {"person_reengage_delay_ms": 1000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000}],
+      "steps": [
+        {"at_ms": 999, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 1000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "timing.fire_ttl.valid_exactly_at_the_limit",
+      "description": "A request issued at 0 with the default lifetime 500 ms that arrives at exactly 500 ms is not expired (expired means now is greater than issued_at_ms plus ttl_ms): granted.",
+      "covers": ["timing:fire_ttl_ms"],
+      "config": {"fire_ttl_ms": 500},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "timing.fire_ttl.expired_one_millisecond_later",
+      "description": "The same request arriving at 501 ms is expired: denied REQUEST_EXPIRED.",
+      "covers": ["timing:fire_ttl_ms", "deny:REQUEST_EXPIRED"],
+      "config": {"fire_ttl_ms": 500},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 501}],
+      "steps": [
+        {"at_ms": 501, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "DENIED", "code": "REQUEST_EXPIRED"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false}
+    },
+    {
+      "id": "timing.per_shot.both_sides",
+      "description": "per_shot_ms 5000: a request for 5001 ms is denied ON_TIME_LIMIT and changes nothing; a request for exactly 5000 ms is granted.",
+      "covers": ["timing:per_shot_ms", "deny:ON_TIME_LIMIT"],
+      "config": {"per_shot_ms": 5000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 100, "every_ms": 50}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5001}}, "expect_reply": {"result": "DENIED", "code": "ON_TIME_LIMIT"}},
+        {"at_ms": 50, "action": "expect", "expect": {"state": "SCANNING", "effector_on": false, "events": []}},
+        {"at_ms": 100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "timing.cooldown.both_sides",
+      "description": "cooldown_ms 1000 and a 500 ms shot that ends at 500 ms: a request at 1499 ms (1 ms short) is denied COOLDOWN_ACTIVE, at exactly 1500 ms it is granted.",
+      "covers": ["timing:cooldown_ms", "deny:COOLDOWN_ACTIVE"],
+      "config": {"cooldown_ms": 1000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1499, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}},
+        {"at_ms": 1500, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "timing.zone_upload_timeout.both_sides",
+      "description": "zone_upload_timeout_ms 1000 with the last upload message at 0: still ZONE_SETUP at 999 ms; at 1000 ms the partial upload is discarded and the state is DISARMED.",
+      "covers": ["timing:zone_upload_timeout_ms"],
+      "config": {"zone_upload_timeout_ms": 1000},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 999, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "DISARMED", "zones": []}}
+      ],
+      "expect": {"state": "DISARMED"}
+    },
+    {
+      "id": "timing.zone_upload_timeout.an_upload_message_restarts_it",
+      "description": "A ZONE_POINT at 999 ms restarts the idle time: still ZONE_SETUP at 1998 ms, DISARMED at 1999 ms.",
+      "covers": ["timing:zone_upload_timeout_ms"],
+      "config": {"zone_upload_timeout_ms": 1000},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 2000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_BEGIN", "fields": {"zone_id": 5, "point_count": 3}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 999, "action": "send", "message": {"type": "ZONE_POINT", "fields": {"index": 0, "pan_cdeg": 1000, "tilt_cdeg": 1000}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1998, "action": "expect", "expect": {"state": "ZONE_SETUP"}},
+        {"at_ms": 1999, "action": "expect", "expect": {"state": "DISARMED"}}
+      ],
+      "expect": {"state": "DISARMED"}
+    },
+    {
+      "id": "timing.homing_duration.both_sides",
+      "description": "homing_duration_ms 1000, homing started at 0: still HOMING (not homed) at 999 ms; DISARMED and homed at 1000 ms.",
+      "covers": ["timing:homing_duration_ms"],
+      "config": {"homing_duration_ms": 1000},
+      "initial": {"state": "HOMING", "homed": false, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 999, "action": "expect", "expect": {"state": "HOMING", "homed": false}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "DISARMED", "homed": true}}
+      ],
+      "expect": {"state": "DISARMED", "homed": true}
+    },
+    {
+      "id": "timing.homing_duration.home_command",
+      "description": "A HOME command from DISARMED starts homing (homed becomes false) and, with homing_duration_ms 1000, ends at exactly 1000 ms with homed true.",
+      "covers": ["timing:homing_duration_ms"],
+      "config": {"homing_duration_ms": 1000},
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "HOME", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "HOMING", "homed": false}},
+        {"at_ms": 999, "action": "expect", "expect": {"state": "HOMING", "homed": false}},
+        {"at_ms": 1000, "action": "expect", "expect": {"state": "DISARMED", "homed": true}}
+      ],
+      "expect": {"state": "DISARMED", "homed": true}
     }
   ]
 }

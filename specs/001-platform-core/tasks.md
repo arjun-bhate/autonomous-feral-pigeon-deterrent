@@ -282,7 +282,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-027, FR-020, FR-041, SC-010, SC-017
   - **Depends**: T038, T019b
 
-- [ ] T041 [US7] Write `protocol/vectors/timing.json`: one vector per timing rule with boundary values on both sides: `heartbeat_interval_ms` (heartbeats at the interval keep the device alive), `watchdog_ms`, `person_clear_holdoff_ms`, `person_reengage_delay_ms`, `per_shot_ms`, `cooldown_ms`, `zone_upload_timeout_ms`, `homing_duration_ms`, and the TTL rule (`fire_ttl_ms` default on a request, exact expiry boundary).
+- [X] T041 [US7] Write `protocol/vectors/timing.json`: one vector per timing rule with boundary values on both sides: `heartbeat_interval_ms` (heartbeats at the interval keep the device alive), `watchdog_ms`, `person_clear_holdoff_ms`, `person_reengage_delay_ms`, `per_shot_ms`, `cooldown_ms`, `zone_upload_timeout_ms`, `homing_duration_ms`, and the TTL rule (`fire_ttl_ms` default on a request, exact expiry boundary).
   - **Tests first**: `tests/contract/test_vectors.py`; tags `timing:<name>` for each named value in protocol section 8 that the device enforces.
   - **Covers**: FR-041, FR-038, FR-025, FR-027, FR-048, FR-049, SC-017
   - **Depends**: T040, T039

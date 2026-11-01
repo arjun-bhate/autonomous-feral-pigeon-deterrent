@@ -115,7 +115,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-044, FR-011, FR-021
   - **Depends**: T004, T007
 
-- [ ] T013 [US6] Create `src/deterrent/simulator/zone_storage.py` part 1: `ZoneStorage` interface (read all zones as raw bytes with their stored CRC, atomic write of one zone, delete one, clear all) and a `MockZoneStorage` with switchable modes: ok, full, locked, unreadable, and a method that corrupts the bytes of one zone.
+- [X] T013 [US6] Create `src/deterrent/simulator/zone_storage.py` part 1: `ZoneStorage` interface (read all zones as raw bytes with their stored CRC, atomic write of one zone, delete one, clear all) and a `MockZoneStorage` with switchable modes: ok, full, locked, unreadable, and a method that corrupts the bytes of one zone.
   - **Tests first**: `tests/unit/test_zone_storage_mock.py`: write then read; write in `full` or `locked` mode raises a storage error and leaves old data; `unreadable` raises on read; corrupting bytes does not change the stored CRC; clear empties the store.
   - **Covers**: FR-037, FR-044, FR-036
   - **Depends**: T012

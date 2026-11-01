@@ -20,13 +20,16 @@ from collections import OrderedDict, deque
 from collections.abc import Callable
 
 from deterrent.clock import Clock, elapsed_ms
-from deterrent.config import Settings
-from deterrent.protocol.codes import MsgType, RejectCode, State
+from deterrent.config import PAN_SOFT_LIMIT_CDEG, TILT_SOFT_LIMIT_CDEG, Settings
+from deterrent.protocol.codes import MsgType, RejectCode, Result, State
 from deterrent.protocol.framing import Frame, FrameError, FrameReader
 from deterrent.protocol.messages import (
     DeviceMessage,
     GenericReject,
+    Home,
     HostMessage,
+    Jog,
+    Move,
     RejectNotice,
     Reply,
     StatusBlock,
@@ -34,6 +37,7 @@ from deterrent.protocol.messages import (
     StatusRequest,
     decode_host_message,
     device_frame,
+    pack_angles,
 )
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
@@ -94,6 +98,9 @@ class Device:
         # (WRONG_STATE) rather than accepted. Tests may replace entries.
         self.handlers: dict[type, Handler] = {
             StatusRequest: self._on_status_request,
+            Home: self._on_home,
+            Move: self._on_move,
+            Jog: self._on_jog,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -248,6 +255,52 @@ class Device:
             return Reply.rejected(frame.type, decoded)
         handler = self.handlers.get(type(decoded))
         if handler is None:
-            self._sink.message_rejected(self.now_ms(), RejectCode.WRONG_STATE, frame.type)
-            return Reply.rejected(frame.type, RejectCode.WRONG_STATE)
-        return handler(decoded)
+            reply = Reply.rejected(frame.type, RejectCode.WRONG_STATE)
+        else:
+            reply = handler(decoded)
+        if reply.result is Result.REJECTED:
+            self._sink.message_rejected(self.now_ms(), RejectCode(reply.code), frame.type)
+        return reply
+
+    # ---- step 8: commands ------------------------------------------------------------------------
+
+    def _on_home(self, message: Home) -> Reply:
+        """Start homing. Only allowed when DISARMED; it ends in DISARMED with homed true."""
+        if self.state is State.HOMING:
+            return Reply.rejected(MsgType.HOME, RejectCode.BUSY_HOMING)
+        if self.state is not State.DISARMED:
+            return Reply.rejected(MsgType.HOME, RejectCode.WRONG_STATE)
+        self.homed = False
+        self._homing_started_ms = self.now_ms()
+        self._set_state(State.HOMING)
+        return Reply.ok(MsgType.HOME)
+
+    def _motion_refusal(self, msg_type: MsgType) -> Reply | None:
+        """The reason MOVE or JOG cannot be done in the current state, or None if it can."""
+        if self.state is State.HOMING:
+            return Reply.rejected(msg_type, RejectCode.BUSY_HOMING)
+        if self.state is State.BOOT:
+            return Reply.rejected(msg_type, RejectCode.NOT_HOMED)
+        if self.state is State.SAFE_ERROR:
+            return Reply.rejected(msg_type, RejectCode.WRONG_STATE)
+        if not self.homed:
+            return Reply.rejected(msg_type, RejectCode.NOT_HOMED)
+        return None
+
+    def _go_to(self, msg_type: MsgType, pan: int, tilt: int) -> Reply:
+        """Move the head to an absolute position, or refuse the whole move (never clamp)."""
+        refusal = self._motion_refusal(msg_type)
+        if refusal is not None:
+            return refusal
+        if not (0 <= pan <= PAN_SOFT_LIMIT_CDEG and 0 <= tilt <= TILT_SOFT_LIMIT_CDEG):
+            return Reply.rejected(msg_type, RejectCode.OUT_OF_SOFT_LIMIT)
+        if (pan, tilt) != (self.pan, self.tilt):
+            self.pan, self.tilt = pan, tilt
+            self._sink.angles_changed(self.now_ms(), pan, tilt)
+        return Reply.ok(msg_type, pack_angles(self.pan, self.tilt))
+
+    def _on_move(self, message: Move) -> Reply:
+        return self._go_to(MsgType.MOVE, message.pan, message.tilt)
+
+    def _on_jog(self, message: Jog) -> Reply:
+        return self._go_to(MsgType.JOG, self.pan + message.dpan, self.tilt + message.dtilt)

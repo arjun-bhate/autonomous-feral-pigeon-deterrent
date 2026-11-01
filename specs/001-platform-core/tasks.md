@@ -140,7 +140,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-017, FR-028, FR-005, FR-011
   - **Depends**: T015b
 
-- [ ] T017 [US6] Add HOME, MOVE and JOG to `device.py`: refused with `BUSY_HOMING` or `NOT_HOMED` while BOOT or HOMING (no angle changes); moves applied instantly; any target outside pan 0 to 24000 or tilt 0 to 8000 refused `OUT_OF_SOFT_LIMIT` (never clamped); `HOME` allowed only in DISARMED.
+- [X] T017 [US6] Add HOME, MOVE and JOG to `device.py`: refused with `BUSY_HOMING` or `NOT_HOMED` while BOOT or HOMING (no angle changes); moves applied instantly; any target outside pan 0 to 24000 or tilt 0 to 8000 refused `OUT_OF_SOFT_LIMIT` (never clamped); `HOME` allowed only in DISARMED.
   - **Tests first**: `tests/unit/test_device_motion.py`: MOVE, JOG, ARM-adjacent commands during HOMING are refused with the specific code and angles unchanged; after homing MOVE to (6000, 2000) is reported back; MOVE and JOG at and 1 centidegree beyond each limit; JOG that would leave the limit is refused whole; HOME in SCANNING is `WRONG_STATE`.
   - **Covers**: FR-017, FR-018, FR-015
   - **Depends**: T016

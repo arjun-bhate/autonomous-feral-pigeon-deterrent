@@ -65,7 +65,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 ## Phase 2: Foundational A (protocol core and geometry, pure code, no I/O)
 
-- [ ] T005 [P] Create `src/deterrent/protocol/crc.py`: CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection, no final XOR) and CRC-32 (IEEE, as zlib) for zone checksums.
+- [X] T005 [P] Create `src/deterrent/protocol/crc.py`: CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection, no final XOR) and CRC-32 (IEEE, as zlib) for zone checksums.
   - **Tests first**: `tests/unit/test_crc.py`: CRC-16 of `"123456789"` is 0x29B1; CRC-32 of `"123456789"` is 0xCBF43926; CRC-32 of a zone (zone_id, count, points i16 LE) matches a hand-built byte string; a one-bit change always changes the CRC (hypothesis).
   - **Covers**: FR-016, FR-031, FR-038
   - **Depends**: T001

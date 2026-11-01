@@ -390,5 +390,13 @@ class Device:
     # ---- inputs the hardware would provide -----------------------------------------------------
 
     def set_key_level(self, on: bool) -> None:
-        """The arm key changed. (The key-off safety rule is added with the SAFE_ERROR rules.)"""
+        """The arm key changed.
+
+        The trigger is the change from on to off, not the level. In every state except
+        BOOT (the level is sampled when BOOT ends) and SAFE_ERROR (already there) it
+        puts the device in SAFE_ERROR with the KEY_OFF fault.
+        """
+        previous = self.key_on
         self.key_on = on
+        if previous and not on and self.state not in (State.BOOT, State.SAFE_ERROR):
+            self._enter_safe_error(Fault.KEY_OFF, DenyReason.KEY_OFF)

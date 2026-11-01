@@ -156,7 +156,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-027, FR-024, FR-028, FR-029
   - **Depends**: T018
 
-- [ ] T019b [US6] Add the key-off rule and fault recovery to `device.py`: key on-to-off in any state except SAFE_ERROR does the same as heartbeat loss with fault `KEY_OFF` and an interlock event; leave SAFE_ERROR only when every latched fault's clearing condition is true (new accepted heartbeat for `HEARTBEAT_LOST`, key on for `KEY_OFF`), arriving in DISARMED, never re-armed; reserved fault bits 2 and 3 are never set.
+- [X] T019b [US6] Add the key-off rule and fault recovery to `device.py`: key on-to-off in any state except SAFE_ERROR does the same as heartbeat loss with fault `KEY_OFF` and an interlock event; leave SAFE_ERROR only when every latched fault's clearing condition is true (new accepted heartbeat for `HEARTBEAT_LOST`, key on for `KEY_OFF`), arriving in DISARMED, never re-armed; reserved fault bits 2 and 3 are never set.
   - **Tests first**: extend `tests/unit/test_device_watchdog.py`: heartbeat alone does not clear a key fault and key alone does not clear a heartbeat fault; both faults need both conditions; recovery lands in DISARMED with armed false and needs an explicit ARM; key off at boot is not an event; DISARM in SAFE_ERROR replies OK and changes nothing; `fault_mask` bits 2 and 3 stay clear through the whole test.
   - **Covers**: FR-020, FR-027, FR-028
   - **Depends**: T019a

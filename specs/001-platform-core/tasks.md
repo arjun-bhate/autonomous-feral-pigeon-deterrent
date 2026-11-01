@@ -330,7 +330,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-010, FR-011, SC-015
   - **Depends**: T044
 
-- [ ] T049 Create `src/deterrent/observability/queries.py`: log filters by component, severity and trace id combined with AND, newest paging with `before_id`, `limit` default 200 and maximum 1000, trace lookup returning spans in position order, list of traces newest first, metric summaries (counter totals by labels, latest gauge, distribution count/p50/p95 with method `nearest-rank`, omit empty distributions, series for charts).
+- [X] T049 Create `src/deterrent/observability/queries.py`: log filters by component, severity and trace id combined with AND, newest paging with `before_id`, `limit` default 200 and maximum 1000, trace lookup returning spans in position order, list of traces newest first, metric summaries (counter totals by labels, latest gauge, distribution count/p50/p95 with method `nearest-rank`, omit empty distributions, series for charts).
   - **Tests first**: `tests/unit/test_queries.py`: each filter alone and combined returns exactly the matching entries (100% of a table of test cases); no match returns an empty list; trace filter returns time order; component list; paging has no gaps or repeats; unknown trace id returns "not found".
   - **Covers**: FR-008, SC-013, SC-015, FR-010
   - **Depends**: T046, T047, T048

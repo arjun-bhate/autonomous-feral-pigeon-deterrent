@@ -358,6 +358,34 @@ def test_a_request_one_ms_early_is_denied_cooldown_active_and_on_time_is_granted
     assert harness.reply(request(harness)).result is Result.GRANTED
 
 
+def test_a_late_tick_does_not_delay_the_cooldown_it_counts_from_the_scheduled_shot_end():
+    # Ticks are promised at least every 10 ms, so one may notice the end of a shot a few
+    # milliseconds late. The cooldown must still count from the scheduled end
+    # (granted time + duration), or its boundary would depend on when the tick happened.
+    harness = ready(watchdog_ms=60000, person_clear_holdoff_ms=60000)
+    start = grant(harness, 500)
+    harness.clock.advance(507)  # the shot should have ended at +500; this tick is 7 ms late
+    harness.tick()
+    assert harness.device.effector_on is False
+    assert harness.device.state is State.COOLDOWN
+    harness.clock.advance(5499 - 507)  # now start + 5499: 1 ms before end + cooldown_ms
+    harness.tick()
+    assert harness.clock.now_ms() == start + 5499
+    assert harness.reply(request(harness)) == denied(DenyReason.COOLDOWN_ACTIVE)
+    harness.clock.advance(1)
+    assert harness.reply(request(harness)).result is Result.GRANTED
+
+
+def test_a_shot_noticed_after_its_cooldown_would_already_be_over_leaves_cooldown_at_once():
+    harness = ready(watchdog_ms=60000, person_clear_holdoff_ms=60000)
+    grant(harness, 500)
+    harness.clock.advance(6000)  # a very late tick: end + cooldown_ms has already passed
+    harness.tick()
+    assert harness.device.effector_on is False
+    assert harness.device.state is State.SCANNING
+    assert harness.device.cooldown_running() is False
+
+
 def test_a_request_in_cooldown_never_turns_the_effector_on():
     harness = ready()
     grant(harness, 500)

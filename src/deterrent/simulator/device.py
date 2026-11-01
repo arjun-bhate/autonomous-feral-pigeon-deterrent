@@ -19,7 +19,7 @@ REJECTED reply), 8. the command is allowed in the current state (each handler).
 from collections import OrderedDict, deque
 from collections.abc import Callable
 
-from deterrent.clock import Clock, elapsed_ms
+from deterrent.clock import U32_MODULUS, Clock, elapsed_ms
 from deterrent.config import PAN_SOFT_LIMIT_CDEG, TILT_SOFT_LIMIT_CDEG, Settings
 from deterrent.geometry.polygon import zone_margin_cdeg
 from deterrent.protocol.codes import (
@@ -637,12 +637,19 @@ class Device:
         self._cooldown_started_ms = now
 
     def _check_shot_end(self, now: int) -> None:
-        """A shot ends by itself when its maximum duration is reached; the cooldown starts."""
+        """A shot ends by itself when its maximum duration is reached; the cooldown starts.
+
+        The cooldown counts from the scheduled end of the shot (granted time + duration),
+        not from the tick that noticed it, so a tick a few milliseconds late cannot move
+        the cooldown boundary.
+        """
         if self.effector_on and elapsed_ms(now, self._shot_started_ms) >= self._shot_duration_ms:
             self.effector_on = False
             self._sink.effector_ended(now)
             self._send_event(EffectorEventMessage(EffectorEvent.NORMAL_END, 0))
-            self._cooldown_started_ms = now
+            self._cooldown_started_ms = (
+                self._shot_started_ms + self._shot_duration_ms
+            ) % U32_MODULUS
             self._set_state(State.COOLDOWN)
 
     def _check_cooldown_expiry(self) -> None:

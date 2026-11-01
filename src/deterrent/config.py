@@ -26,7 +26,7 @@ TILT_SOFT_LIMIT_CDEG = 8000
 # ZONE_LIST must fit the 59-byte payload: 6 bytes per zone gives at most 9 zones.
 _MAX_ZONES_PER_LIST = 9
 _MIN_POINTS_FOR_POLYGON = 3
-_MAX_TTL_MS = 5000  # protocol: ttl_ms is 1 to 5000
+MAX_TTL_MS = 5000  # protocol: ttl_ms is 1 to 5000
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.toml"
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     watchdog_ms: Positive
     person_clear_holdoff_ms: NonNegative
     person_reengage_delay_ms: NonNegative
-    fire_ttl_ms: Annotated[int, Field(ge=1, le=_MAX_TTL_MS)]
+    fire_ttl_ms: Annotated[int, Field(ge=1, le=MAX_TTL_MS)]
     command_ttl_ms: Positive
     per_shot_ms: Annotated[int, Field(ge=MIN_DURATION_MS)]
     cooldown_ms: NonNegative

@@ -80,7 +80,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-023, FR-005, FR-038
   - **Depends**: T001
 
-- [ ] T008 Create `src/deterrent/protocol/messages.py` part 1, host-to-device messages: encode/decode of HOME, MOVE, JOG, HEARTBEAT, ARM, DISARM, ZONE_BEGIN, ZONE_POINT, ZONE_COMMIT, ZONE_DELETE, ZONE_LIST, ZONE_CLEAR, FIRE_REQUEST, FIRE_STOP, STATUS_REQUEST with exact payload lengths (`BAD_LENGTH`) and field ranges (`FIELD_RANGE`): booleans 0/1; `ttl_ms` 1 to 5000; `duration_ms` below 500 including 0 is out of range (no "hold" value); FIRE_STOP has no payload.
+- [X] T008 Create `src/deterrent/protocol/messages.py` part 1, host-to-device messages: encode/decode of HOME, MOVE, JOG, HEARTBEAT, ARM, DISARM, ZONE_BEGIN, ZONE_POINT, ZONE_COMMIT, ZONE_DELETE, ZONE_LIST, ZONE_CLEAR, FIRE_REQUEST, FIRE_STOP, STATUS_REQUEST with exact payload lengths (`BAD_LENGTH`) and field ranges (`FIELD_RANGE`): booleans 0/1; `ttl_ms` 1 to 5000; `duration_ms` below 500 including 0 is out of range (no "hold" value); FIRE_STOP has no payload.
   - **Tests first**: `tests/unit/test_messages_host.py`: round trip each type (hypothesis); wrong length for every type gives `BAD_LENGTH`; boolean 2 gives `FIELD_RANGE`; `duration_ms` 499 and 0 give `FIELD_RANGE`, 500 and 750 pass; FIRE_STOP with one byte gives `BAD_LENGTH`; unknown type gives `UNKNOWN_TYPE`.
   - **Covers**: FR-015, FR-016, FR-038, FR-022
   - **Depends**: T006, T007

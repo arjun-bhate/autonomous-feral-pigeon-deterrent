@@ -385,7 +385,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-001, FR-002, FR-044
   - **Depends**: T001
 
-- [ ] T058 [US1] Create `src/deterrent/health/collector.py`: samples every sensor every 1 s in worker threads with a 1 s per-sensor timeout so one slow sensor cannot hold up the others; a failed, hung or timed-out read produces `unavailable` with value null and never reuses the previous number; gauges persisted every 10 s through `metrics.py`.
+- [X] T058 [US1] Create `src/deterrent/health/collector.py`: samples every sensor every 1 s in worker threads with a 1 s per-sensor timeout so one slow sensor cannot hold up the others; a failed, hung or timed-out read produces `unavailable` with value null and never reuses the previous number; gauges persisted every 10 s through `metrics.py`.
   - **Tests first**: `tests/unit/test_collector.py` (FakeClock + mock sensors): all sensors refresh each second; hanging GPU makes only `gpu_load` unavailable and the others stay on schedule; a value that was readable then fails becomes unavailable on the next refresh (no stale number); gauges saved every 10 s; no missed refresh longer than 4 s over a simulated 5-minute run.
   - **Covers**: FR-001, FR-002, FR-011, SC-001, SC-003
   - **Depends**: T057, T048

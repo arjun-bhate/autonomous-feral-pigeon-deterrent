@@ -315,7 +315,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-013, SC-016, FR-012
   - **Depends**: T044, T004
 
-- [ ] T046 [P] Create `src/deterrent/observability/logging.py`: JSON log records with timestamp, component, severity (`DEBUG`..`CRITICAL`), message, optional `trace_id` (16 hex) and `span_id` (8 hex), a trace-context helper, and a filter that rejects image data and known secret fields.
+- [X] T046 [P] Create `src/deterrent/observability/logging.py`: JSON log records with timestamp, component, severity (`DEBUG`..`CRITICAL`), message, optional `trace_id` (16 hex) and `span_id` (8 hex), a trace-context helper, and a filter that rejects image data and known secret fields.
   - **Tests first**: `tests/unit/test_logging.py`: every record has timestamp, component and severity; trace and span ids have the right shape; a record carrying a bytes image or a field named like a secret is dropped or scrubbed and the drop is itself logged; component required.
   - **Covers**: FR-007, FR-014
   - **Depends**: T044

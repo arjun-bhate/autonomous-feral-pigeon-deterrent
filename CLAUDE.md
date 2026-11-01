@@ -27,8 +27,8 @@ Anything you chose that the owner did not specify. Flag anything uncertain.
 Concrete manual steps with expected results.
 
 ## Working rules
-- Do only what the prompt asks. One task at a time, then stop. Do not start the next task.
-- Do not commit unless asked. When asked, use Conventional Commits.
+- Do only what the prompt asks. Implement the batch of consecutive tasks from tasks.md named in the prompt, one task at a time, each with its tests written first and passing (and ruff clean) before the next task starts. If a task's tests cannot pass, stop and report. At the end of the batch, stop and do not start any task outside it.
+- Do not commit unless asked. When asked, use Conventional Commits, one commit per task. The end-of-batch report must include a plain-language explanation of every new module.
 - Never delete files, run destructive commands, install global tools or change security settings without asking first.
 - Never read, print or commit secrets, credentials, .env files, raw camera footage or datasets.
 - Explain code in plain language. The owner must be able to explain every module in an interview. This point is highly important

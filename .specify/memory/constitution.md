@@ -26,7 +26,12 @@ a written justification in the relevant spec or plan.
 ### I. Spec-Driven, One Task at a Time
 - No production code MUST be written without an approved spec, plan and task list for the
   feature.
-- Exactly one task MUST be implemented per session, after which work MUST stop.
+- A session MUST implement the batch of consecutive tasks from tasks.md named in the owner's
+  prompt, one task at a time, each with its tests written first and passing (and ruff clean)
+  before the next task starts; if a task's tests cannot pass, work MUST stop and report. When
+  the owner's prompt asks for commits, each task ends in one Conventional Commit. At the end of
+  the batch work MUST stop and a report in the CLAUDE.md format MUST be produced, including a
+  plain-language explanation of every new module.
 - Every task MUST ship with automated tests written before the implementation. A task is done
   only when its tests pass AND the owner completes its manual exit checklist.
 - Each task MUST end in one commit using Conventional Commits. Commits are made only when the
@@ -35,6 +40,7 @@ a written justification in the relevant spec or plan.
   `/speckit-analyze` shows no critical issues.
 
 Rationale: small, verified, reviewable steps keep a safety-relevant system understandable.
+Amendment 1.2.0: one-task sessions made feature 001 take weeks; tests are the gate instead.
 
 ### II. Reporting and Explainability
 - After every prompt or task, a report in the format defined in CLAUDE.md MUST be produced.
@@ -203,4 +209,4 @@ outside the home network, and automatic mount detection.
 - CLAUDE.md provides runtime working rules for the coding assistant and MUST remain consistent
   with this constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-10-31
+**Version**: 1.2.0 | **Ratified**: 2026-10-31 | **Last Amended**: 2026-11-01

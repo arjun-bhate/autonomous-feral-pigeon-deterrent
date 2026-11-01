@@ -13,6 +13,9 @@ Each span has a start time, a duration and a status. The rules (data-model.md 1.
 * The total time of the trace is the end of the last span minus the start of the first.
 * A completed trace has all eight spans. A step that never happened is kept with the
   status ``NOT_RUN`` (or ``TIMEOUT`` if a reply never came), never left out.
+* The ``esp32_ack`` span says how the device answered: ``OK`` (granted), ``DENIED`` (with
+  the reason), ``REJECTED`` (the message itself was refused, with the reject code name)
+  or ``TIMEOUT``. After anything but a grant, ``effector_action`` is ``NOT_RUN``.
 * A made-up timing (this feature has no camera) is flagged ``simulated``.
 
 A trace is built in memory and written to the store once, when it is complete.
@@ -44,6 +47,7 @@ class SpanStatus(StrEnum):
     DENIED = "DENIED"
     TIMEOUT = "TIMEOUT"
     NOT_RUN = "NOT_RUN"
+    REJECTED = "REJECTED"  # the device replied REJECTED (a malformed or refused message)
 
 
 class Outcome(StrEnum):
@@ -52,6 +56,7 @@ class Outcome(StrEnum):
     TIMEOUT = "TIMEOUT"
     NO_FIRE_REQUESTED = "NO_FIRE_REQUESTED"
     RUNNING = "RUNNING"
+    REJECTED = "REJECTED"  # the device refused the message itself; it was never arbitrated
 
 
 # A step with no duration cannot have finished.
@@ -97,7 +102,7 @@ class Trace:
         self._reserved: dict[str, str] = {}
         self._completed = False
 
-    # ---- building ---------------------------------------------------------------------------
+    # ---- building ----
 
     def span_id_for(self, name: str) -> str:
         """The id the span called ``name`` will have. Lets a log line cite a step in progress."""
@@ -189,18 +194,27 @@ class Trace:
         self._completed = True
 
     def _check_outcome(self, outcome: Outcome, deny_reason: str | None) -> None:
+        ack = self._spans.get("esp32_ack")
         if outcome is Outcome.DENIED:
-            ack = self._spans.get("esp32_ack")
             if not deny_reason:
                 raise ValueError("a DENIED trace needs the deny reason")
             if ack is None or ack.status is not SpanStatus.DENIED:
                 raise ValueError("a DENIED trace needs an esp32_ack span with status DENIED")
             if ack.attrs.get("reason") != deny_reason:
                 raise ValueError("the esp32_ack span must carry the same reason as the trace")
-        elif deny_reason is not None:
+            return
+        if deny_reason is not None:
             raise ValueError("only a DENIED trace can carry a deny reason")
+        if outcome is Outcome.REJECTED:
+            if ack is None or ack.status is not SpanStatus.REJECTED:
+                raise ValueError("a REJECTED trace needs an esp32_ack span with status REJECTED")
+            if not ack.attrs.get("reject_code"):
+                raise ValueError("the esp32_ack span of a REJECTED trace needs a reject_code")
+        elif outcome is Outcome.GRANTED:
+            if ack is None or ack.status is not SpanStatus.OK:
+                raise ValueError("a GRANTED trace needs an esp32_ack span with status OK")
 
-    # ---- reading ----------------------------------------------------------------------------
+    # ---- reading ----
 
     @property
     def spans(self) -> list[Span]:

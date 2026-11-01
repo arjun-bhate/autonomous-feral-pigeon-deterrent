@@ -228,5 +228,49 @@ def test_outcome_values_are_the_documented_ones():
         "TIMEOUT",
         "NO_FIRE_REQUESTED",
         "RUNNING",
+        "REJECTED",
     }
-    assert {s.value for s in SpanStatus} == {"OK", "DENIED", "TIMEOUT", "NOT_RUN"}
+    assert {s.value for s in SpanStatus} == {"OK", "DENIED", "TIMEOUT", "NOT_RUN", "REJECTED"}
+
+
+def trace_up_to_command() -> Trace:
+    trace = Trace()
+    for index, name in enumerate(STEP_NAMES[:6]):
+        trace.add_span(name, 1000 + index * 100, 100, SpanStatus.OK)
+    return trace
+
+
+def test_a_rejected_reply_shows_the_reject_code_and_no_action():
+    trace = trace_up_to_command()
+    trace.add_span("esp32_ack", 1600, 50, SpanStatus.REJECTED, attrs={"reject_code": "FIELD_RANGE"})
+    trace.complete(Outcome.REJECTED)
+    ack, action = trace.spans[6], trace.spans[7]
+    assert ack.status is SpanStatus.REJECTED and ack.attrs["reject_code"] == "FIELD_RANGE"
+    assert action.status is SpanStatus.NOT_RUN and action.attrs["note"] == "no action"
+    assert trace.outcome is Outcome.REJECTED and trace.deny_reason is None
+    assert trace.to_record().outcome == "REJECTED"
+
+
+def test_a_rejected_outcome_needs_a_rejected_ack_with_a_reject_code():
+    trace = trace_up_to_command()
+    with pytest.raises(ValueError):
+        trace.complete(Outcome.REJECTED)  # no esp32_ack span at all
+    trace.add_span("esp32_ack", 1600, 50, SpanStatus.REJECTED)
+    with pytest.raises(ValueError):
+        trace.complete(Outcome.REJECTED)  # no reject code on the span
+
+
+def test_a_rejected_outcome_cannot_carry_a_deny_reason():
+    trace = trace_up_to_command()
+    trace.add_span("esp32_ack", 1600, 50, SpanStatus.REJECTED, attrs={"reject_code": "NOT_HOMED"})
+    with pytest.raises(ValueError):
+        trace.complete(Outcome.REJECTED, deny_reason="KEY_OFF")
+
+
+def test_a_rejected_ack_cannot_end_a_granted_or_denied_trace():
+    trace = trace_up_to_command()
+    trace.add_span("esp32_ack", 1600, 50, SpanStatus.REJECTED, attrs={"reject_code": "NOT_HOMED"})
+    with pytest.raises(ValueError):
+        trace.complete(Outcome.GRANTED)
+    with pytest.raises(ValueError):
+        trace.complete(Outcome.DENIED, deny_reason="NOT_HOMED")

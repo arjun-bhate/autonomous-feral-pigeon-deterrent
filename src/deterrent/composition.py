@@ -28,6 +28,7 @@ from typing import Any
 
 from deterrent.clock import Clock, SystemClock
 from deterrent.config import Settings, load_settings
+from deterrent.engagement.simulated import SimulatedEngagement
 from deterrent.link.base import DeviceLink
 from deterrent.link.client import DeviceClient
 from deterrent.link.inprocess import InProcessLink
@@ -152,6 +153,7 @@ class Platform:
         clock: Clock | None = None,
         wall_clock_us: Callable[[], int] = wall_clock_us,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        monotonic_us: Callable[[], int] | None = None,
         start_store_thread: bool = True,
         boot_duration_ms: int = SIMULATED_BOOT_MS,
         link_wrapper: Callable[[DeviceLink], DeviceLink] | None = None,
@@ -161,6 +163,7 @@ class Platform:
         self.clock = clock if clock is not None else SystemClock()
         self.wall_clock_us = wall_clock_us
         self._sleep = sleep
+        self._monotonic_us = monotonic_us
         self._start_store_thread = start_store_thread
         self._boot_duration_ms = boot_duration_ms
         self._link_wrapper = link_wrapper
@@ -169,6 +172,7 @@ class Platform:
         self.logger: StructuredLogger | None = None
         self.metrics: MetricsRecorder | None = None
         self.store_closed = False
+        self.engagement: SimulatedEngagement | None = None
 
         self.device: Device | None = None
         self.client: DeviceClient | None = None
@@ -197,6 +201,15 @@ class Platform:
         self.store.add_warning_listener(self._on_storage_warning)
         self.metrics = MetricsRecorder(self.store.submit, clock_us=self.wall_clock_us)
         self.store_closed = False
+        extra = {} if self._monotonic_us is None else {"monotonic_us": self._monotonic_us}
+        self.engagement = SimulatedEngagement(
+            lambda: self.client,
+            self.logger,
+            self.metrics,
+            self.store.submit,
+            wall_clock_us=self.wall_clock_us,
+            **extra,
+        )
         self.logger.info("api", "platform started")
 
     async def stop(self) -> None:

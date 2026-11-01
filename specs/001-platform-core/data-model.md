@@ -46,7 +46,7 @@ Filters combine with AND (FR-008). Results are ordered by `ts_us, id`.
 | trace_id | TEXT PK | 16 hex characters |
 | started_us | INTEGER | start of the first span |
 | ended_us | INTEGER null | end of the last span; null while running |
-| outcome | TEXT | `GRANTED`, `DENIED`, `TIMEOUT`, `NO_FIRE_REQUESTED`, `RUNNING` |
+| outcome | TEXT | `GRANTED`, `DENIED`, `REJECTED`, `TIMEOUT`, `NO_FIRE_REQUESTED`, `RUNNING`. `REJECTED` = the device replied REJECTED (the message itself was refused, for example `FIELD_RANGE` for `duration_ms` 499, or `NOT_HOMED` in BOOT); it was never arbitrated, so it is not a denial |
 | deny_reason | TEXT null | set when the device denied |
 | simulated | INTEGER | 1 when any step timing is made up (always 1 in this feature) |
 
@@ -62,7 +62,7 @@ Derived: `total_us = ended_us - started_us`.
 | name | TEXT | `capture`, `encode`, `network`, `inference`, `decision`, `command`, `esp32_ack`, `effector_action` |
 | started_us | INTEGER | wall clock, for display |
 | duration_us | INTEGER null | monotonic measurement; null if the step never finished |
-| status | TEXT | `OK`, `DENIED`, `TIMEOUT`, `NOT_RUN` |
+| status | TEXT | `OK`, `DENIED`, `REJECTED`, `TIMEOUT`, `NOT_RUN` |
 | simulated | INTEGER | 1 for made-up timings (capture, encode, network, inference) |
 | attrs_json | TEXT null | e.g. deny reason on `esp32_ack`, "no action" on `effector_action` |
 
@@ -70,6 +70,7 @@ Rules (FR-009, SC-014):
 - A completed trace always has all eight rows, in position order. A step that did not happen is present with status `TIMEOUT` or `NOT_RUN`, never omitted.
 - Spans are sequential: `started_us[n+1] >= started_us[n] + duration_us[n]`. The total equals the last end minus the first start.
 - Denied fire request: `esp32_ack` status `DENIED` with the reason; `effector_action` status `NOT_RUN` with attrs "no action".
+- Rejected fire request (device reply REJECTED): `esp32_ack` status `REJECTED` with the reject code name in attrs (`reject_code`, for example `FIELD_RANGE`); `effector_action` status `NOT_RUN` with attrs "no action". The trace outcome is `REJECTED` and `deny_reason` stays null.
 
 ### 1.5 MetricEvent (table `metric_events`)
 

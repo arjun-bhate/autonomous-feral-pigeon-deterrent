@@ -199,7 +199,7 @@ The developer has a written protocol definition covering message types, framing,
 - While HOMING: denied (device not homed); no motion.
 - While DISARMED: denied (not armed).
 - While in ZONE_SETUP: denied; the effector is hard-disabled in this state.
-- While in SAFE/ERROR: denied with the active fault.
+- While in SAFE/ERROR: denied with the reason for the latched condition.
 - While in COOLDOWN: denied COOLDOWN_ACTIVE; the effector is off.
 - Several conditions fail at once: exactly one reason is returned, chosen by a documented priority order, and the test for each reason makes only that condition fail.
 

@@ -63,6 +63,8 @@ Query: `limit` (default 50). Newest first.
 ```
 Always eight spans for a completed trace. 404 with `TRACE_NOT_FOUND` otherwise.
 
+`outcome` is one of `GRANTED`, `DENIED`, `REJECTED`, `TIMEOUT`, `NO_FIRE_REQUESTED`, `RUNNING`. A span `status` is one of `OK`, `DENIED`, `REJECTED`, `TIMEOUT`, `NOT_RUN`. When the device replies REJECTED (for example `FIELD_RANGE` for `duration_ms` 499, or `NOT_HOMED` in BOOT) the `esp32_ack` span has status `REJECTED` and `attrs.reject_code` holds the reject code name, the trace outcome is `REJECTED` and `deny_reason` is null. When the device denies, `esp32_ack` has status `DENIED` and `attrs.reason` holds the denial name. After any outcome other than `GRANTED`, `effector_action` has status `NOT_RUN` and `attrs.note` is "no action". Names only, never numeric codes.
+
 ### GET /api/metrics
 ```json
 { "counters": [ { "name": "fire_requests_denied", "labels": {"reason": "KEY_OFF"}, "total": 3, "unit": "count" } ],

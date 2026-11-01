@@ -340,3 +340,30 @@ def test_send_raw_with_none_expected_passes_when_the_device_stays_silent():
     }
     result = run(vector)
     assert result.passed, format_failure(result)
+
+
+def test_a_deliberately_stale_explicit_number_does_not_disturb_automatic_numbering():
+    # After the stale number 3, scheduled heartbeats must carry on from the highest number
+    # used (5001, 5002, ...), not restart from 2 and be rejected as stale themselves.
+    def move(at, seq, rep):
+        return {
+            "at_ms": at,
+            "action": "send",
+            "message": {"type": "MOVE", "seq": seq, "fields": {"pan_cdeg": 100, "tilt_cdeg": 0}},
+            "expect_reply": rep,
+        }
+
+    vector = {
+        "id": "runner.seq.stale_explicit",
+        "description": "Heartbeats keep being accepted after a stale explicit number.",
+        "covers": ["seq:STALE"],
+        "initial": ARMED,
+        "heartbeats": [{"from_ms": 0, "until_ms": 2000, "every_ms": 200}],
+        "steps": [
+            move(100, 5000, {"result": "OK"}),
+            move(250, 3, {"result": "REJECTED", "code": "STALE_SEQ"}),
+            {"at_ms": 1500, "action": "expect", "expect": {"state": "SCANNING"}},
+        ],
+    }
+    result = run(vector)
+    assert result.passed, format_failure(result)

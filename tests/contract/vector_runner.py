@@ -84,6 +84,7 @@ RETIRED_CODE = 13
 _DEFAULT_TTL_MS = 500
 _DEFAULT_DURATION_MS = 500
 _SEQ_MODULUS = 65536
+_MAX_FORWARD = 32767
 
 _MESSAGE_CLASSES = {
     cls.TYPE.name: cls
@@ -317,6 +318,13 @@ class _Run:
     def next_seq(self) -> int:
         self.last_seq = (self.last_seq + 1) % _SEQ_MODULUS
         return self.last_seq
+
+    def note_seq(self, seq: int) -> None:
+        """Remember an explicit number so automatic numbering carries on after it. A number
+        that is not ahead of the highest so far (a deliberate duplicate or stale one) is
+        ignored, or the next automatic number would go backwards and be stale itself."""
+        if 1 <= (seq - self.last_seq) % _SEQ_MODULUS <= _MAX_FORWARD:
+            self.last_seq = seq
 
     def build_message(self, spec: Mapping[str, Any], at_ms: int):
         cls = _MESSAGE_CLASSES[spec["type"]]
@@ -597,7 +605,7 @@ class _Run:
             spec = step["message"]
             message = self.build_message(spec, at_ms)
             seq = spec["seq"] if "seq" in spec else self.next_seq()
-            self.last_seq = seq
+            self.note_seq(seq)
             outs = self.take_all(self.adapter.send(host_frame(message, seq)), at_ms)
             if "expect_reply" in step:
                 self.check_reply(step["expect_reply"], outs, seq)
@@ -606,7 +614,7 @@ class _Run:
             parsed = parse_frame(wire[:-1]) if wire.endswith(b"\x00") else None
             outs = self.take_all(self.adapter.send(wire), at_ms)
             if isinstance(parsed, Frame):
-                self.last_seq = parsed.seq
+                self.note_seq(parsed.seq)
             if "expect_reply" in step:
                 seq = parsed.seq if isinstance(parsed, Frame) else -1
                 self.check_reply(step["expect_reply"], outs, seq)

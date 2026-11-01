@@ -7,12 +7,15 @@ device must be able to notice that stored bytes no longer match their CRC.
 
 ``MockZoneStorage`` keeps zones in memory and can be switched into failure modes
 (full, locked, unreadable) or have one zone's bytes corrupted, so tests can create
-every storage problem on demand. The file-backed version is added in the next task.
+every storage problem on demand. SqliteZoneStorage (bottom of the file) keeps zones in a file.
 """
 
+import sqlite3
 from abc import ABC, abstractmethod
+from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class StorageError(Exception):
@@ -95,3 +98,79 @@ class MockZoneStorage(ZoneStorage):
         zone = self._zones[zone_id]
         damaged = bytes([zone.points[0] ^ 0x01]) + zone.points[1:]
         self._zones[zone_id] = StoredZone(zone.zone_id, zone.crc32, zone.point_count, damaged)
+
+
+# ---------------------------------------------------------------------------------------
+# File-backed storage
+# ---------------------------------------------------------------------------------------
+
+DEFAULT_ZONE_DB_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "device" / "zone_store.sqlite3"
+)
+
+
+class SqliteZoneStorage(ZoneStorage):
+    """Zones in a small SQLite database file, standing in for the ESP32 flash memory.
+
+    The file belongs to the device alone and is kept in a different folder from the
+    logging database on purpose. Every operation opens the file, does its work and
+    closes it again, so no handle stays open. Each change is one *transaction* (a
+    group of steps that all take effect, or none do): if anything fails part-way the
+    database rolls back and the old zones are still there.
+    """
+
+    def __init__(self, path: Path | str = DEFAULT_ZONE_DB_PATH, timeout_s: float = 0.25) -> None:
+        self._path = Path(path)
+        self._timeout_s = timeout_s
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._run(self._create_table)
+
+    @staticmethod
+    def _create_table(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS zone ("
+            "zone_id INTEGER PRIMARY KEY, crc32 INTEGER, "
+            "point_count INTEGER NOT NULL, points BLOB)"
+        )
+
+    def _run(self, work, write: bool = True):
+        """Run ``work(conn)`` in one transaction; turn any database problem into StorageError."""
+        try:
+            with closing(
+                sqlite3.connect(self._path, timeout=self._timeout_s, isolation_level=None)
+            ) as conn:
+                conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+                try:
+                    result = work(conn)
+                except BaseException:
+                    conn.execute("ROLLBACK")
+                    raise
+                conn.execute("COMMIT")
+                return result
+        except sqlite3.Error as error:
+            raise StorageError(str(error)) from error
+
+    def read_all(self) -> list[StoredZone]:
+        def work(conn: sqlite3.Connection) -> list[StoredZone]:
+            rows = conn.execute(
+                "SELECT zone_id, crc32, point_count, points FROM zone ORDER BY zone_id"
+            ).fetchall()
+            return [StoredZone(zid, crc, count, bytes(points)) for zid, crc, count, points in rows]
+
+        return self._run(work, write=False)
+
+    def write_zone(self, zone: StoredZone) -> None:
+        def work(conn: sqlite3.Connection) -> None:
+            conn.execute("DELETE FROM zone WHERE zone_id = ?", (zone.zone_id,))
+            conn.execute(
+                "INSERT INTO zone (zone_id, crc32, point_count, points) VALUES (?, ?, ?, ?)",
+                (zone.zone_id, zone.crc32, zone.point_count, zone.points),
+            )
+
+        self._run(work)
+
+    def delete_zone(self, zone_id: int) -> None:
+        self._run(lambda conn: conn.execute("DELETE FROM zone WHERE zone_id = ?", (zone_id,)))
+
+    def clear(self) -> None:
+        self._run(lambda conn: conn.execute("DELETE FROM zone"))

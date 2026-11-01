@@ -120,7 +120,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-037, FR-044, FR-036
   - **Depends**: T012
 
-- [ ] T014 [US6] Add the SQLite implementation to `src/deterrent/simulator/zone_storage.py`: file `data/device/zone_store.sqlite3`, table `zone(zone_id INTEGER PK, crc32 INTEGER, point_count INTEGER, points BLOB)`, each write in one transaction, kept in a different file and folder from `data/observability.sqlite3`.
+- [X] T014 [US6] Add the SQLite implementation to `src/deterrent/simulator/zone_storage.py`: file `data/device/zone_store.sqlite3`, table `zone(zone_id INTEGER PK, crc32 INTEGER, point_count INTEGER, points BLOB)`, each write in one transaction, kept in a different file and folder from `data/observability.sqlite3`.
   - **Tests first**: `tests/unit/test_zone_storage_sqlite.py` (uses a temp folder): data survives closing and reopening; a failed write (forced error mid-transaction) leaves the old zones intact; the module never opens `observability.sqlite3`; locked database file raises a storage error instead of hanging.
   - **Covers**: FR-036, FR-030, FR-037, FR-012
   - **Depends**: T013

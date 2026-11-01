@@ -70,7 +70,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-016, FR-031, FR-038
   - **Depends**: T001
 
-- [ ] T006 Create `src/deterrent/protocol/framing.py`: COBS encode/decode, frame build (`type | seq | payload | crc16`, minimum 5, maximum 64 raw bytes, on the wire `COBS(frame) | 0x00`), and frame parse that reports the first failure in protocol.md section 2 order for steps 1 to 3 (`BAD_FRAMING`, `TRUNCATED`, `BAD_CRC`).
+- [X] T006 Create `src/deterrent/protocol/framing.py`: COBS encode/decode, frame build (`type | seq | payload | crc16`, minimum 5, maximum 64 raw bytes, on the wire `COBS(frame) | 0x00`), and frame parse that reports the first failure in protocol.md section 2 order for steps 1 to 3 (`BAD_FRAMING`, `TRUNCATED`, `BAD_CRC`).
   - **Tests first**: `tests/unit/test_framing.py`: round trip for random payloads 0 to 59 bytes (hypothesis); no `0x00` inside an encoded body; oversize (more than 66 wire bytes) is `BAD_FRAMING`; 4-byte frame is `TRUNCATED`; flipped bit is `BAD_CRC`; receiver resynchronises at the next `0x00`; every corrupted, truncated or garbage frame is rejected and never returns a message.
   - **Covers**: FR-016, FR-038, SC-006
   - **Depends**: T005

@@ -18,6 +18,7 @@ from deterrent.protocol.messages import (
     decode_device_message,
     host_frame,
 )
+from deterrent.simulator.control import SimulatorControl
 from deterrent.simulator.device import Device
 from deterrent.simulator.events import RecordingSink
 from deterrent.simulator.zone_storage import MockZoneStorage
@@ -51,6 +52,7 @@ class Harness:
             boot_duration_ms=boot_duration_ms,
             allow_test_injection=True,
         )
+        self.control = SimulatorControl(self.device)
         self.seq = 0
         self.log: list[Out] = []
 
@@ -63,7 +65,7 @@ class Harness:
         harness.advance(harness.settings.homing_duration_ms)
         assert harness.device.state is State.DISARMED
         if key_on:
-            harness.device.set_key_level(True)
+            harness.control.set_key(True)
         return harness
 
     # ---- sending ---------------------------------------------------------------------------

@@ -145,7 +145,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-017, FR-018, FR-015
   - **Depends**: T016
 
-- [ ] T018 [US6] Create `src/deterrent/simulator/control.py` with `SimulatorControl.set_key` and add key input, ARM and DISARM to `device.py`: ARM checks in order `BUSY_HOMING`, `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE`; ARM when already armed is an idempotent OK; DISARM is always accepted (reply OK in every state), cuts the effector if on, discards any upload, moves every state except BOOT, HOMING and SAFE_ERROR to DISARMED; the key level is reported in status.
+- [X] T018 [US6] Create `src/deterrent/simulator/control.py` with `SimulatorControl.set_key` and add key input, ARM and DISARM to `device.py`: ARM checks in order `BUSY_HOMING`, `NOT_HOMED`, `KEY_OFF`, `FAULT_ACTIVE`, `WRONG_STATE`; ARM when already armed is an idempotent OK; DISARM is always accepted (reply OK in every state), cuts the effector if on, discards any upload, moves every state except BOOT, HOMING and SAFE_ERROR to DISARMED; the key level is reported in status.
   - **Tests first**: `tests/unit/test_device_arm.py`: arm with key off refused `KEY_OFF`; arm before homing refused with the homing codes; arm with key on succeeds and state is SCANNING; DISARM replies OK in all 12 state situations reachable now; DISARM during HOMING does not abandon homing (state HOMING, ends DISARMED, `homed` true); key level reported.
   - **Covers**: FR-019, FR-020, FR-017, FR-028
   - **Depends**: T017

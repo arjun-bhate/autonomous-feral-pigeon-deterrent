@@ -24,7 +24,9 @@ from deterrent.config import PAN_SOFT_LIMIT_CDEG, TILT_SOFT_LIMIT_CDEG, Settings
 from deterrent.protocol.codes import MsgType, RejectCode, Result, State
 from deterrent.protocol.framing import Frame, FrameError, FrameReader
 from deterrent.protocol.messages import (
+    Arm,
     DeviceMessage,
+    Disarm,
     GenericReject,
     Home,
     HostMessage,
@@ -101,6 +103,8 @@ class Device:
             Home: self._on_home,
             Move: self._on_move,
             Jog: self._on_jog,
+            Arm: self._on_arm,
+            Disarm: self._on_disarm,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -304,3 +308,34 @@ class Device:
 
     def _on_jog(self, message: Jog) -> Reply:
         return self._go_to(MsgType.JOG, self.pan + message.dpan, self.tilt + message.dtilt)
+
+    def _on_arm(self, message: Arm) -> Reply:
+        """Arm the device. Checks run in a fixed order and the first failure is returned."""
+        if self.armed:
+            return Reply.ok(MsgType.ARM)  # already armed: nothing to do
+        if self.state is State.HOMING:
+            return Reply.rejected(MsgType.ARM, RejectCode.BUSY_HOMING)
+        if not self.homed:
+            return Reply.rejected(MsgType.ARM, RejectCode.NOT_HOMED)
+        if not self.key_on:
+            return Reply.rejected(MsgType.ARM, RejectCode.KEY_OFF)
+        if self.fault_mask != 0:
+            return Reply.rejected(MsgType.ARM, RejectCode.FAULT_ACTIVE)
+        if self.state is not State.DISARMED:
+            return Reply.rejected(MsgType.ARM, RejectCode.WRONG_STATE)
+        self.armed = True
+        self._set_state(State.SCANNING)
+        return Reply.ok(MsgType.ARM)
+
+    def _on_disarm(self, message: Disarm) -> Reply:
+        """Always accepted. In BOOT, HOMING and SAFE_ERROR it changes nothing else."""
+        if self.state not in (State.BOOT, State.HOMING, State.SAFE_ERROR):
+            self.armed = False
+            self._set_state(State.DISARMED)
+        return Reply.ok(MsgType.DISARM)
+
+    # ---- inputs the hardware would provide -----------------------------------------------------
+
+    def set_key_level(self, on: bool) -> None:
+        """The arm key changed. (The key-off safety rule is added with the SAFE_ERROR rules.)"""
+        self.key_on = on

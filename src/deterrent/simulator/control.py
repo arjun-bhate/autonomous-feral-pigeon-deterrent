@@ -46,6 +46,7 @@ _OTHER_FIELDS = {
     "zones",
     "zone_store_corrupt",
     "zone_storage_unreadable",
+    "zone_storage_mode",
     "cooldown_remaining_ms",
     "last_seq",
 }
@@ -125,10 +126,15 @@ class SimulatorControl:
             raise ValueError(f"unknown field(s): {sorted(unknown)}")
         if "state" in fields and _parse_state(fields["state"]) is State.DETER:
             raise ValueError("DETER means the effector is on and cannot be injected")
-        if fields.get("zone_storage_unreadable") and not isinstance(
-            self._device.storage, MockZoneStorage
-        ):
-            raise ValueError("zone_storage_unreadable needs a storage with failure modes")
+        if (
+            fields.get("zone_storage_unreadable") or "zone_storage_mode" in fields
+        ) and not isinstance(self._device.storage, MockZoneStorage):
+            raise ValueError("storage failure modes need a storage that has them")
+        if "zone_storage_mode" in fields:
+            if fields["zone_storage_mode"] not in {"ok", "full", "locked"}:
+                raise ValueError(f"unknown zone_storage_mode {fields['zone_storage_mode']!r}")
+            if fields.get("zone_storage_unreadable") and fields["zone_storage_mode"] != "ok":
+                raise ValueError("zone_storage_unreadable and zone_storage_mode conflict")
         if fields.get("zone_store_corrupt"):
             if "zones" in fields:
                 has_zone = bool(fields["zones"])
@@ -181,7 +187,9 @@ class SimulatorControl:
 
     def _apply_storage(self, fields: dict[str, Any]) -> None:
         storage = self._device.storage
-        if "zone_storage_unreadable" in fields and isinstance(storage, MockZoneStorage):
+        if ("zone_storage_unreadable" in fields or "zone_storage_mode" in fields) and isinstance(
+            storage, MockZoneStorage
+        ):
             storage.mode = StorageMode.OK  # first make it writable, set the mode last
         if "zones" in fields:
             storage.clear()
@@ -208,6 +216,11 @@ class SimulatorControl:
                     )
         if fields.get("zone_storage_unreadable") and isinstance(storage, MockZoneStorage):
             storage.mode = StorageMode.UNREADABLE
+        if "zone_storage_mode" in fields and isinstance(storage, MockZoneStorage):
+            if not fields.get("zone_storage_unreadable"):
+                storage.mode = StorageMode(
+                    fields["zone_storage_mode"]
+                )  # after the zones are placed
 
     def _apply_heartbeat_and_person(self, fields: dict[str, Any], now: int) -> None:
         device = self._device

@@ -195,6 +195,51 @@ def test_corrupting_while_unreadable_still_needs_a_stored_zone():
         harness.control.inject({"zone_store_corrupt": True})
 
 
+def test_zone_storage_mode_makes_storage_refuse_writes_but_stored_zones_are_placed_first():
+    harness = fresh()
+    harness.control.apply_initial({"zones": [SQUARE], "zone_storage_mode": "full"})
+    assert harness.storage.mode is StorageMode.FULL
+    assert [zone.zone_id for zone in harness.storage.read_all()] == [1]  # still readable
+    harness.control.inject({"zone_storage_mode": "locked"})
+    assert harness.storage.mode is StorageMode.LOCKED
+    harness.control.inject({"zone_storage_mode": "ok"})
+    assert harness.storage.mode is StorageMode.OK
+
+
+def test_a_commit_is_rejected_zone_storage_error_when_storage_is_full_and_nothing_is_stored():
+    from deterrent.protocol.codes import RejectCode
+    from deterrent.protocol.crc import zone_crc32
+    from deterrent.protocol.messages import ZoneBegin, ZoneCommit, ZonePoint
+
+    harness = fresh()
+    harness.control.apply_initial({"zones": [SQUARE], "zone_storage_mode": "full"})
+    points = [(1000, 1000), (2000, 1000), (1500, 2000)]
+    assert harness.reply(ZoneBegin(2, 3)).result is Result.OK
+    for index, (pan, tilt) in enumerate(points):
+        assert harness.reply(ZonePoint(index, pan, tilt)).result is Result.OK
+    reply = harness.reply(ZoneCommit(zone_crc32(2, points)))
+    assert (reply.result, reply.code) == (Result.REJECTED, int(RejectCode.ZONE_STORAGE_ERROR))
+    assert [zone.zone_id for zone in harness.storage.read_all()] == [1]
+
+
+def test_apply_initial_without_a_storage_mode_puts_storage_back_to_ok():
+    harness = fresh()
+    harness.control.apply_initial({"zone_storage_mode": "locked"})
+    harness.control.apply_initial({})
+    assert harness.storage.mode is StorageMode.OK
+
+
+def test_a_bad_storage_mode_or_a_conflict_is_refused_and_changes_nothing():
+    harness = fresh()
+    with pytest.raises(ValueError):
+        harness.control.apply_initial({"zone_storage_mode": "melted"})
+    with pytest.raises(ValueError):
+        harness.control.apply_initial(
+            {"zone_storage_mode": "full", "zone_storage_unreadable": True}
+        )
+    assert harness.storage.mode is StorageMode.OK
+
+
 def test_cooldown_remaining_ms_starts_a_running_cooldown_with_that_much_left():
     harness = fresh()
     harness.control.apply_initial({"cooldown_remaining_ms": 3000})

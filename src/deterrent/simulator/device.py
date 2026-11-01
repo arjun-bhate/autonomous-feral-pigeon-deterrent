@@ -44,6 +44,7 @@ from deterrent.protocol.messages import (
     pack_heartbeat_data,
 )
 from deterrent.simulator.events import DeviceEventSink
+from deterrent.simulator.person import PersonCheck, PersonSnapshot, PersonTimers, evaluate_person
 from deterrent.simulator.zone_storage import MockZoneStorage, ZoneStorage
 
 Handler = Callable[[HostMessage], Reply]
@@ -85,6 +86,7 @@ class Device:
         self.effector_on = False
         self.fault_mask = 0
         self.key_on = False
+        self._person = PersonTimers()
         self._heartbeat_seen = False
         self._last_heartbeat_ms = 0
 
@@ -183,6 +185,18 @@ class Device:
             self._last_status_ms = now
             self._send_event(StatusEvent(block))
 
+    def person_snapshot(self) -> PersonSnapshot:
+        return self._person.snapshot()
+
+    def person_check(self) -> PersonCheck:
+        """Is a person present, and has the re-engage delay passed? (device clock only)"""
+        return evaluate_person(
+            self._person.snapshot(),
+            self.now_ms(),
+            self.settings.person_clear_holdoff_ms,
+            self.settings.person_reengage_delay_ms,
+        )
+
     # ---- time-based work ----------------------------------------------------------------------
 
     def _service(self) -> None:
@@ -215,6 +229,7 @@ class Device:
         if self.state is State.SAFE_ERROR:
             return  # already there; only the extra fault is recorded
         self.armed = False
+        self._person.restart()
         if self.state is State.HOMING:
             self.homed = False  # homing is abandoned, not resumed
         self._set_state(State.SAFE_ERROR)
@@ -231,6 +246,7 @@ class Device:
         if self.fault_mask & Fault.KEY_OFF and self.key_on:
             self.fault_mask &= ~int(Fault.KEY_OFF)
         if self.fault_mask == 0:
+            self._person.restart()
             self._set_state(State.DISARMED)
 
     def _finish_homing(self) -> None:
@@ -385,6 +401,8 @@ class Device:
         if self.fault_mask & Fault.HEARTBEAT_LOST:
             self.fault_mask &= ~int(Fault.HEARTBEAT_LOST)
             self._check_recovery()
+        # After any recovery restart, so this heartbeat itself begins the new clear period.
+        self._person.on_heartbeat(now, message.person_clear, self.settings.person_clear_holdoff_ms)
         return Reply.ok(MsgType.HEARTBEAT, pack_heartbeat_data(now, self.state))
 
     # ---- inputs the hardware would provide -----------------------------------------------------

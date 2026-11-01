@@ -1,4 +1,170 @@
 {
   "protocol_version": "0.1",
-  "vectors": []
+  "vectors": [
+    {
+      "id": "fire.grant.all_conditions_hold",
+      "description": "Every condition holds, so the fire request is granted.",
+      "covers": ["grant:ALL_CONDITIONS"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}]}
+    },
+    {
+      "id": "fire.deny.heartbeat_lost",
+      "description": "No heartbeat has been accepted yet; every other condition holds.",
+      "covers": ["deny:HEARTBEAT_LOST"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "no_heartbeat": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "HEARTBEAT_LOST"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.fault_active_reserved",
+      "description": "A reserved fault bit (INTERNAL) is set, injected; every other condition holds.",
+      "covers": ["deny:FAULT_ACTIVE"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "fault_mask": ["INTERNAL"]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "FAULT_ACTIVE", "data": {"fault_mask": ["INTERNAL"]}}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": ["INTERNAL"], "events": []}
+    },
+    {
+      "id": "fire.deny.zone_setup",
+      "description": "The device is in ZONE_SETUP; every other condition holds.",
+      "covers": ["deny:ZONE_SETUP"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "ZONE_SETUP", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ZONE_SETUP"}}
+      ],
+      "expect": {"state": "ZONE_SETUP", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.not_homed",
+      "description": "The head is not homed; every other condition holds.",
+      "covers": ["deny:NOT_HOMED"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": false, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "NOT_HOMED"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.key_off",
+      "description": "Only the key is off; everything else would allow firing (live level, no key change seen).",
+      "covers": ["deny:KEY_OFF"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": false, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "KEY_OFF"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.not_armed",
+      "description": "The device is not armed; every other condition holds.",
+      "covers": ["deny:NOT_ARMED"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "NOT_ARMED"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": false, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.person_reported",
+      "description": "The latest heartbeat reports a person; every other condition holds.",
+      "covers": ["deny:PERSON_NOT_CLEAR"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_NOT_CLEAR"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.person_clear_delay",
+      "description": "No person now, but the clear period is 1 ms short of the re-engage delay.",
+      "covers": ["deny:PERSON_CLEAR_DELAY", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 4999},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.request_expired",
+      "description": "The request arrives at 501 ms with a 500 ms lifetime issued at 0; all else holds.",
+      "covers": ["deny:REQUEST_EXPIRED", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 501, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "REQUEST_EXPIRED"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.zone_store_invalid",
+      "description": "The stored zone fails its checksum; every other condition holds.",
+      "covers": ["deny:ZONE_STORE_INVALID", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "zone_store_corrupt": true},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ZONE_STORE_INVALID"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.elevation_limit",
+      "description": "Tilt 6000 is above the configured elevation limit 4000; every other condition holds.",
+      "covers": ["deny:ELEVATION_LIMIT", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 6000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ELEVATION_LIMIT"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.in_zone_margin",
+      "description": "The head points inside a stored zone; every other condition holds.",
+      "covers": ["deny:IN_ZONE_MARGIN", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 10500, "tilt_cdeg": 2500, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "IN_ZONE_MARGIN"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "duration.above_per_shot_denied",
+      "description": "The request asks for 5001 ms, one more than per_shot_ms; every other condition holds.",
+      "covers": ["deny:ON_TIME_LIMIT", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 5001}}, "expect_reply": {"result": "DENIED", "code": "ON_TIME_LIMIT"}}
+      ],
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    },
+    {
+      "id": "fire.deny.cooldown_active",
+      "description": "A cooldown with 2000 ms left is running; every other condition holds.",
+      "covers": ["deny:COOLDOWN_ACTIVE", "codes:DIFFERS_FROM_PRIORITY"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "COOLDOWN", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "cooldown_remaining_ms": 2000},
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "COOLDOWN_ACTIVE"}}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+    }
+  ]
 }

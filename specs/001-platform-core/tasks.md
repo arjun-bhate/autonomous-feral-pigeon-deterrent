@@ -252,7 +252,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-039, FR-041, FR-029, FR-016, SC-006, SC-007, SC-017
   - **Depends**: T032, T015b
 
-- [ ] T035 [US7] Write the denial and grant vectors in `protocol/vectors/fire_arbitration.json` (contract section 3 and 5): one vector per active denial reason (14), each with only that condition failing and tags `deny:<NAME>` (plus `codes:DIFFERS_FROM_PRIORITY` for PERSON_CLEAR_DELAY, REQUEST_EXPIRED, ZONE_STORE_INVALID, ELEVATION_LIMIT, IN_ZONE_MARGIN, ON_TIME_LIMIT, COOLDOWN_ACTIVE), and a grant vector where every condition holds.
+- [X] T035 [US7] Write the denial and grant vectors in `protocol/vectors/fire_arbitration.json` (contract section 3 and 5): one vector per active denial reason (14), each with only that condition failing and tags `deny:<NAME>` (plus `codes:DIFFERS_FROM_PRIORITY` for PERSON_CLEAR_DELAY, REQUEST_EXPIRED, ZONE_STORE_INVALID, ELEVATION_LIMIT, IN_ZONE_MARGIN, ON_TIME_LIMIT, COOLDOWN_ACTIVE), and a grant vector where every condition holds.
   - **Tests first**: run `tests/contract/test_vectors.py`; a mutation check in `tests/contract/test_vector_mutations.py` flips each satisfied condition in the grant vector one at a time and confirms the reply changes to the matching denial (proves "only that condition fails").
   - **Covers**: FR-041, FR-039, FR-022, FR-023, FR-025, SC-008, SC-009, SC-017
   - **Depends**: T034, T025b

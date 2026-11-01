@@ -73,7 +73,7 @@ Run several engagements (granted ones at least 5 seconds apart, because of the c
 ```powershell
 uv run pytest tests/unit/test_arbitration.py tests/unit/test_zones.py -v
 ```
-**Expect** one passing test per denial reason and per zone rejection. Hand-driven checks: send `FIRE_REQUEST` through `/api/dev/command` in different conditions and confirm the denial `code` matches the Code column of the ladder table in [contracts/protocol.md](contracts/protocol.md).
+**Expect** one passing test per denial reason and per zone rejection. Hand-driven checks: send `FIRE_REQUEST` through `/api/dev/command` in different conditions and confirm the denial `code` matches the Code column of the ladder table in [protocol/PROTOCOL.md](../../protocol/PROTOCOL.md).
 
 ### Story 7: protocol and vectors
 1. `uv run pytest tests/contract -v`. **Expect** every vector passes.

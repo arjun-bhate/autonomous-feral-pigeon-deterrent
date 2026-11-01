@@ -74,7 +74,6 @@ specs/001-platform-core/
 ├── data-model.md        # Phase 1: entities, fields, storage tables, state machine
 ├── quickstart.md        # Phase 1: how to run and check the feature end to end
 ├── contracts/
-│   ├── protocol.md          # Draft of the ESP32 protocol (promoted to protocol/PROTOCOL.md in the implementation)
 │   ├── scenario-vectors.md  # File format of the machine-readable vectors and the adapter interface
 │   └── dashboard-api.md     # REST, WebSocket and developer-tool endpoints
 └── tasks.md             # Phase 2 (/speckit-tasks) - NOT created by this command
@@ -91,7 +90,7 @@ config/
 └── default.toml             # every tunable value, with units (timings, limits, zone limits)
 
 protocol/                    # Shared by the simulator now and the ESP32 firmware later
-├── PROTOCOL.md              # The written protocol (single copy; promoted from contracts/protocol.md)
+├── PROTOCOL.md              # The written protocol (single copy; moved here from the former contracts folder in T030)
 ├── vector-schema.json       # JSON Schema for vector files
 ├── reason-codes.json        # Permanent denial-reason code table (name to code); never reassigned
 └── vectors/

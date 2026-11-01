@@ -149,7 +149,7 @@ ZONE_SETUP --(ZONE_BEGIN accepted: old upload discarded, fresh start)--> ZONE_SE
 ZONE_SETUP, DISARMED --(ZONE_BEGIN rejected)--> unchanged (not entered / stays)
 ```
 
-The ZONE_SETUP rows are exactly the table "Leaving ZONE_SETUP" in [contracts/protocol.md](contracts/protocol.md) section 5.5; the SAFE_ERROR rows are its section 5.6. If the two ever differ, the protocol document wins and this diagram must be corrected.
+The ZONE_SETUP rows are exactly the table "Leaving ZONE_SETUP" in [protocol/PROTOCOL.md](../../protocol/PROTOCOL.md) section 5.5; the SAFE_ERROR rows are its section 5.6. If the two ever differ, the protocol document wins and this diagram must be corrected.
 
 Key-off trigger: the **change** from on to off, in every state except SAFE_ERROR. A device that boots with the key already off is not faulted; it simply cannot arm.
 
@@ -193,7 +193,7 @@ Fields in the request: `issued_at_ms`, `ttl_ms`, `intended_pan_cdeg`, `intended_
 
 ## 3. Messages
 
-Authoritative layouts, byte by byte, are in [contracts/protocol.md](contracts/protocol.md). Entities:
+Authoritative layouts, byte by byte, are in [protocol/PROTOCOL.md](../../protocol/PROTOCOL.md). Entities:
 
 - **Command message**: `type`, `seq`, payload, `crc16`.
 - **Reply**: the request type with the high bit set (`type | 0x80`), the request's `seq`, a result (`OK`, `REJECTED`, `GRANTED`, `DENIED`), a code, and optional data.

@@ -16,7 +16,7 @@
 
 Every vector file also records `protocol_version` (the protocol version it was written for). Vectors name reasons (for example `REQUEST_EXPIRED`) and never write reason numbers; priority vectors name rungs.
 
-Coverage rule (FR-041, SC-017): a test fails if any denial reason, zone rejection code or timing rule in `contracts/protocol.md` has no vector whose `covers` names it. The same test also fails if any row of the "Leaving ZONE_SETUP" table (protocol.md 5.5, tags `setup:IN`, `setup:EXIT_1` to `setup:EXIT_8`) or any rule of protocol.md 5.2 and 5.6 (tags `key:*`) has no vector. It also fails if any state in the FIRE_STOP table (protocol.md 5.4, tags `stop:STATE_*`) has no vector. Retired reasons need no denial vector.
+Coverage rule (FR-041, SC-017): a test fails if any denial reason, zone rejection code or timing rule in `protocol/PROTOCOL.md` has no vector whose `covers` names it. The same test also fails if any row of the "Leaving ZONE_SETUP" table (protocol.md 5.5, tags `setup:IN`, `setup:EXIT_1` to `setup:EXIT_8`) or any rule of protocol.md 5.2 and 5.6 (tags `key:*`) has no vector. It also fails if any state in the FIRE_STOP table (protocol.md 5.4, tags `stop:STATE_*`) has no vector. Retired reasons need no denial vector.
 
 ## 2. A vector
 

@@ -20,7 +20,9 @@ from deterrent.geometry.polygon import (
     has_zero_area,
 )
 from deterrent.protocol.codes import RejectCode
+from deterrent.protocol.crc import crc32 as crc32_of
 from deterrent.protocol.crc import zone_bytes, zone_crc32
+from deterrent.protocol.messages import ZoneEntry
 from deterrent.simulator.zone_storage import StorageError, StoredZone, ZoneStorage
 
 _MIN_POINTS = 3
@@ -117,6 +119,56 @@ class ZoneService:
             self._storage.write_zone(StoredZone(upload.zone_id, crc32, len(points), blob))
         except StorageError:
             return RejectCode.ZONE_STORAGE_ERROR  # 9: the write succeeds
+        return None
+
+    # ---- the stored zones -------------------------------------------------------------------
+
+    def store_valid(self) -> bool:
+        """Is the zone store intact? Recomputed from the stored bytes on every call.
+
+        Valid means every stored zone's bytes still match the CRC-32 saved with them. An
+        empty store is valid. A store that cannot be read is invalid (its bytes cannot be
+        checked), and valid again as soon as it can be read and the CRCs match. Corrupt
+        bytes stay invalid until a ZONE_CLEAR (or deleting that zone) removes them.
+        """
+        try:
+            zones = self._storage.read_all()
+        except StorageError:
+            return False
+        return all(
+            len(zone.points) == 4 * zone.point_count
+            and crc32_of(bytes([zone.zone_id, zone.point_count]) + zone.points) == zone.crc32
+            for zone in zones
+        )
+
+    def zone_count(self) -> int:
+        try:
+            return len(self._storage.read_all())
+        except StorageError:
+            return 0
+
+    def list_entries(self) -> list[ZoneEntry] | None:
+        """(id, point count, stored CRC) of every zone, or None if storage is unreadable."""
+        try:
+            zones = self._storage.read_all()
+        except StorageError:
+            return None
+        return [ZoneEntry(z.zone_id, z.point_count, z.crc32) for z in zones]
+
+    def delete(self, zone_id: int) -> RejectCode | None:
+        try:
+            if not any(z.zone_id == zone_id for z in self._storage.read_all()):
+                return RejectCode.ZONE_UNKNOWN_ID
+            self._storage.delete_zone(zone_id)
+        except StorageError:
+            return RejectCode.ZONE_STORAGE_ERROR
+        return None
+
+    def clear(self) -> RejectCode | None:
+        try:
+            self._storage.clear()
+        except StorageError:
+            return RejectCode.ZONE_STORAGE_ERROR
         return None
 
     # ---- ending an upload ------------------------------------------------------------------

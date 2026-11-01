@@ -39,12 +39,16 @@ from deterrent.protocol.messages import (
     StatusEvent,
     StatusRequest,
     ZoneBegin,
+    ZoneClear,
     ZoneCommit,
+    ZoneDelete,
+    ZoneList,
     ZonePoint,
     decode_host_message,
     device_frame,
     pack_angles,
     pack_heartbeat_data,
+    pack_zone_list,
 )
 from deterrent.simulator.events import DeviceEventSink
 from deterrent.simulator.person import PersonCheck, PersonSnapshot, PersonTimers, evaluate_person
@@ -120,6 +124,9 @@ class Device:
             ZoneBegin: self._on_zone_begin,
             ZonePoint: self._on_zone_point,
             ZoneCommit: self._on_zone_commit,
+            ZoneDelete: self._on_zone_delete,
+            ZoneList: self._on_zone_list,
+            ZoneClear: self._on_zone_clear,
         }
 
     # ---- the outside world --------------------------------------------------------------
@@ -173,10 +180,10 @@ class Device:
         )
 
     def _zone_store_valid(self) -> bool:
-        return True  # replaced by the derived check when stored zones arrive (T023)
+        return self.zones.store_valid()
 
     def _zone_count(self) -> int:
-        return 0  # replaced when stored zones arrive (T023)
+        return self.zones.zone_count()
 
     def _on_status_request(self, message: StatusRequest) -> Reply:
         return Reply.ok(MsgType.STATUS_REQUEST, self.status_block().encode_payload())
@@ -452,6 +459,30 @@ class Device:
         if refusal is not None:
             return Reply.rejected(MsgType.ZONE_COMMIT, refusal)
         return Reply.ok(MsgType.ZONE_COMMIT)
+
+    def _on_zone_delete(self, message: ZoneDelete) -> Reply:
+        if self.state not in (State.DISARMED, State.ZONE_SETUP):
+            return Reply.rejected(MsgType.ZONE_DELETE, RejectCode.WRONG_STATE)
+        refusal = self.zones.delete(message.zone_id)
+        if refusal is not None:
+            return Reply.rejected(MsgType.ZONE_DELETE, refusal)
+        return Reply.ok(MsgType.ZONE_DELETE)
+
+    def _on_zone_clear(self, message: ZoneClear) -> Reply:
+        if self.state not in (State.DISARMED, State.ZONE_SETUP):
+            return Reply.rejected(MsgType.ZONE_CLEAR, RejectCode.WRONG_STATE)
+        refusal = self.zones.clear()
+        if refusal is not None:
+            return Reply.rejected(MsgType.ZONE_CLEAR, refusal)
+        return Reply.ok(MsgType.ZONE_CLEAR)
+
+    def _on_zone_list(self, message: ZoneList) -> Reply:
+        if self.state is State.BOOT:
+            return Reply.rejected(MsgType.ZONE_LIST, RejectCode.WRONG_STATE)
+        entries = self.zones.list_entries()
+        if entries is None:
+            return Reply.rejected(MsgType.ZONE_LIST, RejectCode.ZONE_STORAGE_ERROR)
+        return Reply.ok(MsgType.ZONE_LIST, pack_zone_list(entries))
 
     # ---- inputs the hardware would provide -----------------------------------------------------
 

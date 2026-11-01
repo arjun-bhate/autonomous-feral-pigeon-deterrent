@@ -59,7 +59,7 @@
     {
       "id": "fire.deny.key_off",
       "description": "Only the key is off; everything else would allow firing (live level, no key change seen).",
-      "covers": ["deny:KEY_OFF"],
+      "covers": ["deny:KEY_OFF", "key:LIVE_LEVEL"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": false, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
       "steps": [
@@ -81,7 +81,7 @@
     {
       "id": "fire.deny.person_reported",
       "description": "The latest heartbeat reports a person; every other condition holds.",
-      "covers": ["deny:PERSON_NOT_CLEAR"],
+      "covers": ["deny:PERSON_NOT_CLEAR", "person:NO_STATE_CHANGE"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false},
       "steps": [
@@ -92,7 +92,7 @@
     {
       "id": "fire.deny.person_clear_delay",
       "description": "No person now, but the clear period has only just started, so the re-engage delay has not elapsed.",
-      "covers": ["deny:PERSON_CLEAR_DELAY", "codes:DIFFERS_FROM_PRIORITY"],
+      "covers": ["deny:PERSON_CLEAR_DELAY", "codes:DIFFERS_FROM_PRIORITY", "timing:person_reengage_delay_ms"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "clear_streak_ms": 0},
       "steps": [
@@ -114,18 +114,18 @@
     {
       "id": "fire.deny.zone_store_invalid",
       "description": "The stored zone fails its checksum; every other condition holds.",
-      "covers": ["deny:ZONE_STORE_INVALID", "codes:DIFFERS_FROM_PRIORITY"],
+      "covers": ["deny:ZONE_STORE_INVALID", "codes:DIFFERS_FROM_PRIORITY", "store:NOT_FAULT_ACTIVE"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "zone_store_corrupt": true},
       "steps": [
         {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"issued_at_ms": 0, "ttl_ms": 500, "duration_ms": 500}}, "expect_reply": {"result": "DENIED", "code": "ZONE_STORE_INVALID"}}
       ],
-      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": []}
+      "expect": {"state": "SCANNING", "effector_on": false, "armed": true, "fault_mask": [], "events": [], "zone_store_valid": false}
     },
     {
       "id": "fire.deny.elevation_limit",
       "description": "Tilt 6000 is above the configured elevation limit 4000; every other condition holds.",
-      "covers": ["deny:ELEVATION_LIMIT", "codes:DIFFERS_FROM_PRIORITY"],
+      "covers": ["deny:ELEVATION_LIMIT", "codes:DIFFERS_FROM_PRIORITY", "denial:NO_FAULT"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 6000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
       "steps": [
@@ -136,7 +136,7 @@
     {
       "id": "fire.deny.in_zone_margin",
       "description": "The head points inside a stored zone; every other condition holds.",
-      "covers": ["deny:IN_ZONE_MARGIN", "codes:DIFFERS_FROM_PRIORITY"],
+      "covers": ["deny:IN_ZONE_MARGIN", "codes:DIFFERS_FROM_PRIORITY", "denial:NO_FAULT"],
       "config": {"elevation_max_cdeg": 4000},
       "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 10500, "tilt_cdeg": 2500, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
       "steps": [
@@ -235,6 +235,318 @@
         {"at_ms": 25000, "action": "advance"}
       ],
       "expect": {"state": "COOLDOWN", "effector_on": false, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 5000}, {"event": "on", "at_ms": 10000}, {"event": "normal_end", "at_ms": 15000}, {"event": "on", "at_ms": 20000}, {"event": "normal_end", "at_ms": 25000}], "counters": {"fire_granted": 3, "rejected.total": 0}}
+    },
+    {
+      "id": "fire.cut.person_while_on",
+      "description": "A shot is running; a heartbeat reports a person: the effector is cut within 100 ms, the shot ends in COOLDOWN, the device stays armed, no fault.",
+      "covers": ["person:CUT", "timing:person_clear_holdoff_ms", "interlock:PERSON_NOT_CLEAR"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 200}, {"from_ms": 600, "until_ms": 1000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 1000, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "PERSON_NOT_CLEAR", "within_ms": 100}], "counters": {"interlock.total": 1}}
+    },
+    {
+      "id": "person.cut_shot_not_resumed",
+      "description": "After a person cut the person leaves and time passes: nothing fires by itself; only a new request, after the delay and cooldown, is granted.",
+      "covers": ["person:NO_RESUME", "person:CUT"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 200}, {"from_ms": 600, "until_ms": 7000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 6900, "action": "advance"},
+        {"at_ms": 6900, "action": "expect", "expect": {"effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "PERSON_NOT_CLEAR", "within_ms": 100}]}},
+        {"at_ms": 7000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 7000}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "PERSON_NOT_CLEAR", "within_ms": 100}, {"event": "on", "at_ms": 7000}]}
+    },
+    {
+      "id": "person.stale_status",
+      "description": "Clear heartbeats stop for 500 ms with a hold-off of 300 ms: the status is stale (the heartbeat is not lost), so the request is denied PERSON_NOT_CLEAR and nothing else happens.",
+      "covers": ["deny:PERSON_NOT_CLEAR", "timing:person_clear_holdoff_ms"],
+      "config": {"person_clear_holdoff_ms": 300},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 700, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 700}}, "expect_reply": {"result": "DENIED", "code": "PERSON_NOT_CLEAR"}}
+      ],
+      "expect": {"state": "SCANNING", "armed": true, "fault_mask": [], "effector_on": false}
+    },
+    {
+      "id": "person.stale_restarts_delay",
+      "description": "After a stale gap the clear period starts again at the next clear heartbeat (800): 1999 ms later the delay (2000) has not elapsed, at 2000 ms it has. The clear period before the gap does not count.",
+      "covers": ["person:RESTART", "timing:person_reengage_delay_ms", "timing:person_clear_holdoff_ms"],
+      "config": {"person_clear_holdoff_ms": 300, "person_reengage_delay_ms": 2000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 200}, {"from_ms": 800, "until_ms": 3000}],
+      "steps": [
+        {"at_ms": 2799, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 2799}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 2800, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 2800}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "person.boot_no_status",
+      "description": "Before any heartbeat the request is denied HEARTBEAT_LOST (rung 1 first); after the first clear heartbeat it is denied PERSON_CLEAR_DELAY until the delay has passed.",
+      "covers": ["deny:HEARTBEAT_LOST", "deny:PERSON_CLEAR_DELAY", "timing:person_reengage_delay_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "no_heartbeat": true},
+      "heartbeats": [{"from_ms": 100, "until_ms": 5100, "every_ms": 200}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "DENIED", "code": "HEARTBEAT_LOST"}},
+        {"at_ms": 200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 200}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 5099, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 5099}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 5100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 5100}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "fault_mask": []}
+    },
+    {
+      "id": "person.delay.boundary_exact",
+      "description": "A person was reported; clear heartbeats start at 0. One millisecond before the delay (5000) the request is denied; exactly at the delay it is granted (the heartbeat of that instant counts).",
+      "covers": ["deny:PERSON_CLEAR_DELAY", "person:BOUNDARY", "timing:person_reengage_delay_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false},
+      "heartbeats": [{"from_ms": 0, "until_ms": 5000}],
+      "steps": [
+        {"at_ms": 4999, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 4999}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 5000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 5000}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "person.delay.reappear_restarts",
+      "description": "Clear from 0; a person is reported at 3000 and gone at 3200. The time before 3000 does not count: requests are denied until exactly 5000 ms after 3200.",
+      "covers": ["person:RESTART", "person:BOUNDARY", "timing:person_reengage_delay_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 2800}, {"from_ms": 3200, "until_ms": 8200}],
+      "steps": [
+        {"at_ms": 3000, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 3100, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 3100}}, "expect_reply": {"result": "DENIED", "code": "PERSON_NOT_CLEAR"}},
+        {"at_ms": 8199, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 8199}}, "expect_reply": {"result": "DENIED", "code": "PERSON_CLEAR_DELAY"}},
+        {"at_ms": 8200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 8200}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "person.delay.zero_disables",
+      "description": "With person_reengage_delay_ms 0 a request right after the first clear heartbeat is granted: PERSON_CLEAR_DELAY is never returned.",
+      "covers": ["person:BOUNDARY", "timing:person_reengage_delay_ms"],
+      "config": {"person_reengage_delay_ms": 0},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "person_clear": false},
+      "heartbeats": [{"from_ms": 0, "until_ms": 0}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true}
+    },
+    {
+      "id": "fire.margin.denial_not_latched",
+      "description": "The head points inside a stored zone: the request is denied IN_ZONE_MARGIN and no fault is latched. After a MOVE outside the margin a new request is granted.",
+      "covers": ["deny:IN_ZONE_MARGIN", "denial:NO_FAULT"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 10500, "tilt_cdeg": 2500, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "DENIED", "code": "IN_ZONE_MARGIN"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "SCANNING", "armed": true, "fault_mask": []}},
+        {"at_ms": 100, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 5000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK", "data": {"pan": 5000, "tilt": 3000}}},
+        {"at_ms": 200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 200}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "fault_mask": []}
+    },
+    {
+      "id": "fire.elevation.denial_not_latched",
+      "description": "Tilt 6000 is above the configured limit 4000: denied ELEVATION_LIMIT with no fault. After a MOVE to tilt 3000 a new request is granted.",
+      "covers": ["deny:ELEVATION_LIMIT", "denial:NO_FAULT"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 6000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 200, "every_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "DENIED", "code": "ELEVATION_LIMIT"}},
+        {"at_ms": 0, "action": "expect", "expect": {"state": "SCANNING", "armed": true, "fault_mask": []}},
+        {"at_ms": 100, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 5000, "tilt_cdeg": 3000}}, "expect_reply": {"result": "OK", "data": {"pan": 5000, "tilt": 3000}}},
+        {"at_ms": 200, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 200}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "effector_on": true, "fault_mask": []}
+    },
+    {
+      "id": "fire.cut.zone_margin_while_on",
+      "description": "A shot is running and the head is moved into a zone margin: the effector is cut within 100 ms, the shot ends in COOLDOWN, still armed, no fault.",
+      "covers": ["interlock:IN_ZONE_MARGIN"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 10500, "tilt_cdeg": 2500}}, "expect_reply": {"result": "OK", "data": {"pan": 10500, "tilt": 2500}}},
+        {"at_ms": 500, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "IN_ZONE_MARGIN", "within_ms": 100}], "counters": {"interlock.total": 1}}
+    },
+    {
+      "id": "fire.ttl.not_rechecked_while_on",
+      "description": "ttl_ms 500 and duration_ms 2000: the shot is not cut when the request's lifetime passes; it ends normally at 2000 ms. Nothing is cut with cause REQUEST_EXPIRED.",
+      "covers": ["interlock:NO_TTL_RECHECK", "timing:fire_ttl_ms"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 2000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 2000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 600, "action": "expect", "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}], "counters": {"interlock.total": 0}}},
+        {"at_ms": 1900, "action": "expect", "expect": {"state": "DETER", "effector_on": true, "events": [{"event": "on", "at_ms": 0}], "counters": {"interlock.total": 0}}},
+        {"at_ms": 2000, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 2000}], "counters": {"interlock.total": 0}}}
+      ],
+      "expect": {"state": "COOLDOWN", "events": [{"event": "on", "at_ms": 0}, {"event": "normal_end", "at_ms": 2000}]}
+    },
+    {
+      "id": "fire.cut.elevation_while_on",
+      "description": "A shot is running and the tilt is moved beyond the elevation limit (inside the soft limit): cut within 100 ms, COOLDOWN, still armed, no fault.",
+      "covers": ["interlock:ELEVATION_LIMIT"],
+      "config": {"elevation_max_cdeg": 4000},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 5000, "tilt_cdeg": 6000}}, "expect_reply": {"result": "OK", "data": {"pan": 5000, "tilt": 6000}}},
+        {"at_ms": 500, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "ELEVATION_LIMIT", "within_ms": 100}], "counters": {"interlock.total": 1}}
+    },
+    {
+      "id": "store.empty_is_valid",
+      "description": "No zones are stored: the store is valid and a request that passes everything else is granted.",
+      "covers": ["store:EMPTY_VALID"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": []},
+      "steps": [
+        {"at_ms": 0, "action": "expect", "expect": {"zone_store_valid": true, "zones": []}},
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "zone_store_valid": true}
+    },
+    {
+      "id": "store.invalid_cut_while_on",
+      "description": "A shot is running and the stored zone's bytes become corrupt: the effector is cut within 100 ms with cause ZONE_STORE_INVALID; COOLDOWN, still armed, no fault.",
+      "covers": ["interlock:ZONE_STORE_INVALID"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "inject", "fields": {"zone_store_corrupt": true}},
+        {"at_ms": 500, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "zone_store_valid": false, "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "ZONE_STORE_INVALID", "within_ms": 100}], "counters": {"interlock.total": 1}}
+    },
+    {
+      "id": "store.clear_recovers",
+      "description": "A corrupt store is invalid. In DISARMED, ZONE_CLEAR empties it (valid again); after ARM a request is granted.",
+      "covers": ["store:CLEAR_RECOVERS"],
+      "initial": {"state": "DISARMED", "homed": true, "armed": false, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "zone_store_corrupt": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 100}],
+      "steps": [
+        {"at_ms": 0, "action": "expect", "expect": {"zone_store_valid": false, "state": "DISARMED"}},
+        {"at_ms": 0, "action": "send", "message": {"type": "ZONE_CLEAR", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 10, "action": "expect", "expect": {"zone_store_valid": true, "zones": []}},
+        {"at_ms": 20, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 30, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 30}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "zone_store_valid": true, "effector_on": true}
+    },
+    {
+      "id": "store.stays_invalid_without_clear",
+      "description": "Corrupt bytes do not repair themselves: after 10 s with heartbeats the request is still denied ZONE_STORE_INVALID.",
+      "covers": ["store:NO_AUTO_CLEAR", "deny:ZONE_STORE_INVALID"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}], "zone_store_corrupt": true},
+      "heartbeats": [{"from_ms": 0, "until_ms": 10000}],
+      "steps": [
+        {"at_ms": 0, "action": "expect", "expect": {"zone_store_valid": false}},
+        {"at_ms": 10000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 10000}}, "expect_reply": {"result": "DENIED", "code": "ZONE_STORE_INVALID"}}
+      ],
+      "expect": {"state": "SCANNING", "zone_store_valid": false, "fault_mask": []}
+    },
+    {
+      "id": "store.unreadable_then_readable",
+      "description": "While storage cannot be read the store counts as invalid (request denied); once it is readable again with matching checksums it is valid again, with no ZONE_CLEAR.",
+      "covers": ["store:UNREADABLE", "store:READABLE_AGAIN", "deny:ZONE_STORE_INVALID"],
+      "config": {"cooldown_ms": 0},
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 600, "action": "inject", "fields": {"zone_storage_unreadable": true}},
+        {"at_ms": 700, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 700}}, "expect_reply": {"result": "DENIED", "code": "ZONE_STORE_INVALID"}},
+        {"at_ms": 750, "action": "expect", "expect": {"zone_store_valid": false}},
+        {"at_ms": 800, "action": "inject", "fields": {"zone_storage_unreadable": false}},
+        {"at_ms": 850, "action": "expect", "expect": {"zone_store_valid": true}},
+        {"at_ms": 900, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 900}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "zone_store_valid": true, "effector_on": true}
+    },
+    {
+      "id": "store.unreadable_cuts_running_shot",
+      "description": "A shot is running and the storage becomes unreadable: the shot is cut with cause ZONE_STORE_INVALID.",
+      "covers": ["store:UNREADABLE", "interlock:ZONE_STORE_INVALID"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 500}],
+      "steps": [
+        {"at_ms": 0, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 5000, "issued_at_ms": 0}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 400, "action": "inject", "fields": {"zone_storage_unreadable": true}},
+        {"at_ms": 500, "action": "advance"}
+      ],
+      "expect": {"state": "COOLDOWN", "effector_on": false, "armed": true, "fault_mask": [], "events": [{"event": "on", "at_ms": 0}, {"event": "cut", "cause": "ZONE_STORE_INVALID", "within_ms": 100}]}
+    },
+    {
+      "id": "store.unreadable_then_corrupt_stays_invalid",
+      "description": "The storage becomes unreadable and, while unreadable, the stored bytes are damaged. Readable again, the bytes still fail their checksums: denied. After DISARM, ZONE_CLEAR and ARM a new request is granted.",
+      "covers": ["store:UNREADABLE", "store:NO_AUTO_CLEAR", "deny:ZONE_STORE_INVALID"],
+      "initial": {"state": "SCANNING", "homed": true, "armed": true, "key_on": true, "pan_cdeg": 5000, "tilt_cdeg": 3000, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 0, "until_ms": 1000}],
+      "steps": [
+        {"at_ms": 100, "action": "inject", "fields": {"zone_storage_unreadable": true}},
+        {"at_ms": 200, "action": "inject", "fields": {"zone_store_corrupt": true}},
+        {"at_ms": 300, "action": "inject", "fields": {"zone_storage_unreadable": false}},
+        {"at_ms": 400, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 400}}, "expect_reply": {"result": "DENIED", "code": "ZONE_STORE_INVALID"}},
+        {"at_ms": 450, "action": "expect", "expect": {"zone_store_valid": false}},
+        {"at_ms": 500, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 600, "action": "send", "message": {"type": "ZONE_CLEAR", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 650, "action": "expect", "expect": {"zone_store_valid": true}},
+        {"at_ms": 700, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 800, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 800}}, "expect_reply": {"result": "GRANTED"}}
+      ],
+      "expect": {"state": "DETER", "zone_store_valid": true, "effector_on": true}
+    },
+    {
+      "id": "fault.reserved_bits_stay_clear",
+      "description": "One long run (boot, homing, arm, a shot, a person cut, a zone denial, a corrupt store and ZONE_CLEAR, key off and on, heartbeat loss and recovery): bits 2 and 3 of the fault mask are never set.",
+      "covers": ["fault:RESERVED_CLEAR"],
+      "config": {"homing_duration_ms": 1000, "cooldown_ms": 1000, "person_reengage_delay_ms": 1000},
+      "initial": {"state": "BOOT", "homed": false, "armed": false, "key_on": true, "zones": [{"zone_id": 1, "points": [[9500, 2000], [11500, 2000], [11500, 3000], [9500, 3000]]}]},
+      "heartbeats": [{"from_ms": 200, "until_ms": 1600}, {"from_ms": 1800, "until_ms": 1800}, {"from_ms": 2000, "until_ms": 4000}, {"from_ms": 6000, "until_ms": 6600}],
+      "steps": [
+        {"at_ms": 50, "action": "expect", "expect": {"state": "BOOT", "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 1200, "action": "expect", "expect": {"state": "DISARMED", "homed": true, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 1300, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 1350, "action": "expect", "expect": {"state": "SCANNING", "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 1400, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 2000, "issued_at_ms": 1400}}, "expect_reply": {"result": "GRANTED"}},
+        {"at_ms": 1450, "action": "expect", "expect": {"state": "DETER", "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 1700, "action": "send", "message": {"type": "HEARTBEAT", "fields": {"person_clear": false}}},
+        {"at_ms": 1750, "action": "expect", "expect": {"state": "COOLDOWN", "effector_on": false, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 2000, "action": "send", "message": {"type": "MOVE", "fields": {"pan_cdeg": 10500, "tilt_cdeg": 2500}}, "expect_reply": {"result": "OK", "data": {"pan": 10500, "tilt": 2500}}},
+        {"at_ms": 2100, "action": "expect", "expect": {"fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 3000, "action": "send", "message": {"type": "FIRE_REQUEST", "fields": {"ttl_ms": 500, "duration_ms": 500, "issued_at_ms": 3000}}, "expect_reply": {"result": "DENIED", "code": "IN_ZONE_MARGIN"}},
+        {"at_ms": 3050, "action": "expect", "expect": {"state": "SCANNING", "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 3100, "action": "inject", "fields": {"zone_store_corrupt": true}},
+        {"at_ms": 3150, "action": "expect", "expect": {"zone_store_valid": false, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 3200, "action": "send", "message": {"type": "DISARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 3300, "action": "send", "message": {"type": "ZONE_CLEAR", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 3350, "action": "expect", "expect": {"zone_store_valid": true, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 3500, "action": "send", "message": {"type": "ARM", "fields": {}}, "expect_reply": {"result": "OK"}},
+        {"at_ms": 3600, "action": "set_key", "on": false},
+        {"at_ms": 3650, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["KEY_OFF"], "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 3800, "action": "set_key", "on": true},
+        {"at_ms": 3850, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 5001, "action": "expect", "expect": {"state": "SAFE_ERROR", "fault_mask": ["HEARTBEAT_LOST"], "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}},
+        {"at_ms": 6100, "action": "expect", "expect": {"state": "DISARMED", "fault_mask": [], "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}}
+      ],
+      "expect": {"state": "DISARMED", "armed": false, "fault_mask_lacks": ["HOMING_FAILED", "INTERNAL"]}
     }
   ]
 }

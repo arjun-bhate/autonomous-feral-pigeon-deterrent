@@ -262,7 +262,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-023, FR-041, FR-048, FR-049, SC-017, SC-008
   - **Depends**: T035
 
-- [ ] T037 [US7] Add the interlock, person, zone-margin, store-validity and key-level vectors to `fire_arbitration.json` (contract section 7.1 to 7.5): person reported, cut while on, not resumed, stale status, stale restarts the delay, boot with no status, delay boundary exact and restart, delay zero, margin and elevation denials not faults, cuts while on, TTL not re-checked while on, store empty/invalid/cut/clear/no-auto-clear/unreadable cases, live key level, reserved fault bits stay clear, `FAULT_ACTIVE` with an injected reserved bit.
+- [X] T037 [US7] Add the interlock, person, zone-margin, store-validity and key-level vectors to `fire_arbitration.json` (contract section 7.1 to 7.5): person reported, cut while on, not resumed, stale status, stale restarts the delay, boot with no status, delay boundary exact and restart, delay zero, margin and elevation denials not faults, cuts while on, TTL not re-checked while on, store empty/invalid/cut/clear/no-auto-clear/unreadable cases, live key level, reserved fault bits stay clear, `FAULT_ACTIVE` with an injected reserved bit.
   - **Tests first**: `tests/contract/test_vectors.py`; each cut vector asserts the effector is off within 100 ms (`within_ms: 100`).
   - **Covers**: FR-026, FR-048, FR-035, FR-024, FR-041, SC-010, SC-012, SC-020, SC-017
   - **Depends**: T036, T026

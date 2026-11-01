@@ -1,0 +1,22 @@
+name: CI
+
+# Runs on every push: lint, format check, tests. Linux runner, so anything that
+# needs Windows-only hardware access must be mocked in tests.
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check
+      - name: Ruff format check
+        run: uv run ruff format --check
+      - name: Tests
+        run: uv run pytest

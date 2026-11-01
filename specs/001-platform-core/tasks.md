@@ -44,7 +44,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-043, FR-045
   - **Depends**: none
 
-- [ ] T002 Configure ruff and pytest in `pyproject.toml` and create `.github/workflows/ci.yml` (ruff check, ruff format --check, pytest on every push; Linux runner).
+- [X] T002 Configure ruff and pytest in `pyproject.toml` and create `.github/workflows/ci.yml` (ruff check, ruff format --check, pytest on every push; Linux runner).
   - **Tests first**: `tests/unit/test_smoke.py` extended: pytest collects all four test folders; `uv run ruff check` and `uv run ruff format --check` exit 0 on the skeleton. (CI itself can only be seen once pushed; say so in the report.)
   - **Covers**: FR-043, FR-045
   - **Depends**: T001

@@ -345,7 +345,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-021, FR-024, FR-025, FR-044, FR-015
   - **Depends**: T050, T004
 
-- [ ] T052 Create `src/deterrent/composition.py`, the only module that wires simulator, link, client, storage and API, including the `DeviceEventSink` adapter that turns device events into logs (component `simulator`), counters (granted/denied by reason, interlock events by cause, rejected messages by cause), the `homing_drift_simulated` sample and the live status. Reads `config/default.toml`.
+- [X] T052 Create `src/deterrent/composition.py`, the only module that wires simulator, link, client, storage and API, including the `DeviceEventSink` adapter that turns device events into logs (component `simulator`), counters (granted/denied by reason, interlock events by cause, rejected messages by cause), the `homing_drift_simulated` sample and the live status. Reads `config/default.toml`.
   - **Tests first**: `tests/integration/test_composition.py`: building the app graph starts and stops cleanly; a denied fire request increases `fire_requests_denied` for that reason by one; a granted request increases `fire_requests_granted`; a cut increases `interlock_events` by cause; a corrupted frame increases `protocol_messages_rejected` by cause; each generates a structured log entry; no other module imports both `simulator` and `observability` (checked by the architecture test T070).
   - **Covers**: FR-011, FR-007, FR-021, FR-043
   - **Depends**: T029, T051, T049, T012

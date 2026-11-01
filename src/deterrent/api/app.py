@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from deterrent.api import routes_read
+from deterrent.api import live, routes_read
 from deterrent.composition import Platform
 from deterrent.config import Settings, load_settings
 
@@ -102,9 +102,13 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await platform.start()
+        hub = live.LiveHub(platform)
+        app.state.hub = hub
+        await hub.start()
         try:
             yield
         finally:
+            await hub.stop()
             await platform.stop()
 
     app = FastAPI(title="Feral Pigeon Deterrent dashboard", lifespan=lifespan)
@@ -129,6 +133,7 @@ def create_app(
         return error_response(422, "INVALID_REQUEST", f"{where}: {first.get('msg', 'invalid')}")
 
     app.include_router(routes_read.router)
+    app.include_router(live.router)
     app.mount("/static", StaticFiles(directory=frontend_dir, check_dir=False), name="static")
     return app
 

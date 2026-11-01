@@ -185,6 +185,11 @@ class Platform:
         self._storage_listeners: list[Callable[[StorageWarning | None], None]] = []
 
     @property
+    def sleep(self) -> Callable[[float], Awaitable[None]]:
+        """The sleep function every loop uses (tests replace it with virtual time)."""
+        return self._sleep
+
+    @property
     def started(self) -> bool:
         return self.store is not None and not self.store_closed
 

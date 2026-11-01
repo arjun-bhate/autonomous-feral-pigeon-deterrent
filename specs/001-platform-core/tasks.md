@@ -360,7 +360,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-004, FR-013, FR-014, FR-030
   - **Depends**: T052
 
-- [ ] T055 Create `src/deterrent/api/live.py`: the `/ws/live` hub (server to client only) with message types `snapshot`, `device`, `device_offline`, `log`, `storage_warning`, `tick` (every 1 s); device updates on every status change and at least once per second while running; reads from memory so it never waits on disk. (`health` messages are added in T059.)
+- [X] T055 Create `src/deterrent/api/live.py`: the `/ws/live` hub (server to client only) with message types `snapshot`, `device`, `device_offline`, `log`, `storage_warning`, `tick` (every 1 s); device updates on every status change and at least once per second while running; reads from memory so it never waits on disk. (`health` messages are added in T059.)
   - **Tests first**: `tests/integration/test_live.py` (async websocket client, FakeClock): snapshot arrives immediately on connect; a pan change reaches the client within 1 s of FakeClock time (SC-004 measured here); stopping the simulator sends `device_offline`; a new log entry is pushed; `storage_warning` is pushed when the store flips to warning and cleared later; two clients receive the same values; with the store in `locked` mode the hub still sends within its schedule.
   - **Covers**: FR-004, FR-006, FR-013, SC-004, SC-005, SC-016
   - **Depends**: T054, T045

@@ -18,3 +18,7 @@ data/raw/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Runtime data (databases, logs) - never committed
+data/
+*.sqlite3

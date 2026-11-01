@@ -39,7 +39,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the uv project skeleton: `pyproject.toml`, `.python-version` (3.12), `.gitignore` additions (`data/`, `*.sqlite3`, `__pycache__`), empty package `src/deterrent/__init__.py` and the sub-package folders from plan.md, empty `tests/{unit,contract,integration,architecture}/`. Add dependencies with `uv add` (project-local only; list them in the report).
+- [X] T001 Create the uv project skeleton: `pyproject.toml`, `.python-version` (3.12), `.gitignore` additions (`data/`, `*.sqlite3`, `__pycache__`), empty package `src/deterrent/__init__.py` and the sub-package folders from plan.md, empty `tests/{unit,contract,integration,architecture}/`. Add dependencies with `uv add` (project-local only; list them in the report).
   - **Tests first**: `tests/unit/test_smoke.py`: `import deterrent` works; `git check-ignore data/x.sqlite3` is true (as a test using subprocess).
   - **Covers**: FR-043, FR-045
   - **Depends**: none

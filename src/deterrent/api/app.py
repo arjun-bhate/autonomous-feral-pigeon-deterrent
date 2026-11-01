@@ -29,7 +29,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from deterrent.api import live, routes_read
+from deterrent.api import live, routes_dev, routes_read
+from deterrent.api.errors import ApiError, error_response
 from deterrent.composition import Platform
 from deterrent.config import Settings, load_settings
 
@@ -49,20 +50,6 @@ _STATUS_CODES = {
     409: "CONFLICT",
     422: "INVALID_REQUEST",
 }
-
-
-class ApiError(Exception):
-    """Raise this from a route to return the standard error shape."""
-
-    def __init__(self, status: int, code: str, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.code = code
-        self.message = message
-
-
-def error_response(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
 class LoopbackHostMiddleware:
@@ -134,6 +121,7 @@ def create_app(
 
     app.include_router(routes_read.router)
     app.include_router(live.router)
+    app.include_router(routes_dev.router)
     app.mount("/static", StaticFiles(directory=frontend_dir, check_dir=False), name="static")
     return app
 

@@ -365,7 +365,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-004, FR-006, FR-013, SC-004, SC-005, SC-016
   - **Depends**: T054, T045
 
-- [ ] T056 Create `src/deterrent/api/routes_dev.py`: developer tools (only when `PIGEON_DEV_TOOLS=1`; otherwise 404) per dashboard-api.md section 4: simulator start and stop, `key`, `person`, `command` (any protocol type including ARM, DISARM, FIRE_REQUEST, FIRE_STOP, passed through the normal client; returns the decoded reply unchanged), `engagement`, `zone-store/corrupt`, `storage/fail`. (`sensors/{name}/fail` is added in T059.)
+- [X] T056 Create `src/deterrent/api/routes_dev.py`: developer tools (only when `PIGEON_DEV_TOOLS=1`; otherwise 404) per dashboard-api.md section 4: simulator start and stop, `key`, `person`, `command` (any protocol type including ARM, DISARM, FIRE_REQUEST, FIRE_STOP, passed through the normal client; returns the decoded reply unchanged), `engagement`, `zone-store/corrupt`, `storage/fail`. (`sensors/{name}/fail` is added in T059.)
   - **Tests first**: `tests/integration/test_api_dev.py`: all routes return 404 when dev tools are off; simulator start leads through BOOT and HOMING to DISARMED; stop makes device status `running: false`; `command` with `duration_ms` 499 returns the device's `FIELD_RANGE` reject unchanged; a FIRE_REQUEST reply is exactly what the device produced; `engagement` returns a `trace_id` that exists; `storage/fail` raises and clears the warning; no dev route has a parameter that can force a grant.
   - **Covers**: FR-047, FR-021, FR-043, FR-015, FR-050
   - **Depends**: T054, T053

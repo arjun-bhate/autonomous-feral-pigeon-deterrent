@@ -506,7 +506,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-014, FR-012
   - **Depends**: T071
 
-- [ ] T073 Create the slow-marked test `tests/integration/test_health_soak.py` (`pytest -m slow`): a simulated 5-minute health run on the FakeClock with the real collector schedule and mock sensors, one GPU hang and one temperature outage; asserts no refresh gap above 4 s and every other slot on schedule (SC-001, SC-003). Register the `slow` marker in `pyproject.toml`.
+- [X] T073 Create the slow-marked test `tests/integration/test_health_soak.py` (`pytest -m slow`): a simulated 5-minute health run on the FakeClock with the real collector schedule and mock sensors, one GPU hang and one temperature outage; asserts no refresh gap above 4 s and every other slot on schedule (SC-001, SC-003). Register the `slow` marker in `pyproject.toml`.
   - **Tests first**: the test is the deliverable.
   - **Covers**: SC-001, SC-003, SC-002
   - **Depends**: T061

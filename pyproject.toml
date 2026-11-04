@@ -38,6 +38,9 @@ testpaths = [
 pythonpath = ["src", "tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: long simulated runs (the 5-minute health soak); run alone with -m slow",
+]
 
 [tool.ruff]
 line-length = 100

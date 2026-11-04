@@ -1,20 +1,3 @@
-<!--
-SYNC IMPACT REPORT (temporary; remove before committing)
-Version change: (unratified template) -> 1.0.0
-Modified principles: none (initial ratification; all template placeholders replaced)
-Added sections:
-  - Core Principles I-VIII (spec-driven workflow, reporting, layered safety, homing,
-    observability, hardware-free testability, honest results, privacy)
-  - Technology Stack; System Constraints; Out of Scope (v1); Governance
-Removed sections: none (template placeholder sections SECTION_2/SECTION_3 became the
-  Technology Stack and System Constraints sections; Out of Scope added)
-Source check: input compared with docs/system-scope.md (v1.3) and CLAUDE.md; no conflicts found.
-  Reconciled, not conflicting: "one commit per task" (Principle I) is applied together with
-  CLAUDE.md's "do not commit unless asked".
-Follow-up TODOs: none. Open decisions that the constitution deliberately leaves to feature
-  plans: homing sensor type (feature 003), max zones/points, census parameters, max re-home
-  deferral, YOLO version pin, video transport/protocol.
--->
 # Autonomous Feral Pigeon Deterrent System Constitution
 
 A portfolio-grade robotics project. The words MUST, MUST NOT, SHOULD and SHOULD NOT are used as
@@ -23,7 +6,7 @@ a written justification in the relevant spec or plan.
 
 ## Core Principles
 
-### I. Spec-Driven, One Task at a Time
+### I. Spec-Driven, Test-Gated Batches
 - No production code MUST be written without an approved spec, plan and task list for the
   feature.
 - A session MUST implement the batch of consecutive tasks from tasks.md named in the owner's

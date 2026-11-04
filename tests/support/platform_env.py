@@ -19,7 +19,13 @@ class Env:
     """A started platform whose clocks are all one VirtualTime."""
 
     def __init__(
-        self, tmp_path, *, faults: bool = False, dev_tools: bool = True, sensors: bool = False
+        self,
+        tmp_path,
+        *,
+        faults: bool = False,
+        dev_tools: bool = True,
+        sensors: bool = False,
+        boot_duration_ms: int = 0,
     ) -> None:
         self.vt = VirtualTime()
         wrapper = None
@@ -44,7 +50,7 @@ class Env:
             sleep=self.vt.sleep,
             monotonic_us=lambda: self.vt.elapsed_ms * 1000,
             start_store_thread=False,
-            boot_duration_ms=0,
+            boot_duration_ms=boot_duration_ms,
             link_wrapper=wrapper,
             sensor_providers=list(self.sensors.values()),
             health_spawn=spawn_and_wait_briefly,

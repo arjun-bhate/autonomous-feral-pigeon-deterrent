@@ -9,7 +9,8 @@ device replied. It does four jobs:
   The client waits for the matching one, for at most ``command_ttl_ms``; if nothing
   arrives it raises ``CommandTimeout``. It never retries by itself, because repeating a
   fire request is not something to do automatically.
-* **The heartbeat.** Every ``heartbeat_interval_ms`` it tells the device "the laptop is
+* **The heartbeat.** Once the device has left BOOT (it refuses heartbeats while booting),
+  and then every ``heartbeat_interval_ms``, it tells the device "the laptop is
   alive, and the camera sees no person" (or "a person is present"). If the heartbeats
   stop, the device's watchdog puts it in a safe state. The "person clear" value comes
   from a provider function (default: always clear) that a future detector will supply.
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from deterrent.clock import U32_MODULUS, Clock, elapsed_ms
 from deterrent.config import Settings
 from deterrent.link.base import DeviceLink
-from deterrent.protocol.codes import EventType, MsgType, RejectCode, Result
+from deterrent.protocol.codes import EventType, MsgType, RejectCode, Result, State
 from deterrent.protocol.framing import Frame, FrameError, FrameReader
 from deterrent.protocol.messages import (
     DeviceMessage,
@@ -38,6 +39,9 @@ from deterrent.protocol.messages import (
     Heartbeat,
     HostMessage,
     Reply,
+    StatusBlock,
+    StatusEvent,
+    StatusRequest,
     decode_device_message,
     host_frame,
     unpack_heartbeat_data,
@@ -82,6 +86,7 @@ class DeviceClient:
         self._seq = 0
         self._pending: dict[int, _Pending] = {}
         self._offset_ms: int | None = None
+        self._boot_ended = asyncio.Event()  # set once the device reports a state other than BOOT
         self._tasks: list[asyncio.Task] = []
         self._running = False
         self.unmatched_replies = 0
@@ -180,7 +185,32 @@ class DeviceClient:
 
     # ---- the heartbeat ------------------------------------------------------------------------
 
+    async def _wait_for_boot_to_end(self) -> None:
+        """Return when the device has reported a state other than BOOT.
+
+        The device refuses heartbeats in BOOT, so none are sent before then. Its STATUS
+        event normally says so within a few milliseconds; if nothing arrives for one
+        heartbeat interval, ask with STATUS_REQUEST. If the device does not answer at all,
+        give up waiting: sending heartbeats anyway is the safe side for the watchdog.
+        """
+        interval = self._settings.heartbeat_interval_ms / 1000
+        while not self._boot_ended.is_set():
+            waiter = asyncio.ensure_future(self._boot_ended.wait())
+            timer = asyncio.ensure_future(self._sleep(interval))
+            try:
+                await asyncio.wait({waiter, timer}, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                waiter.cancel()
+                timer.cancel()
+            if self._boot_ended.is_set():
+                return
+            try:
+                await self.request(StatusRequest())  # the reply updates the known state
+            except CommandTimeout:
+                return
+
     async def _heartbeat_loop(self) -> None:
+        await self._wait_for_boot_to_end()
         while True:
             await self._send_heartbeat()
             await self._sleep(self._settings.heartbeat_interval_ms / 1000)
@@ -214,6 +244,8 @@ class DeviceClient:
         if isinstance(message, RejectCode):
             self.damaged_frames += 1
             return
+        if isinstance(message, StatusEvent):
+            self._note_state(message.status)
         if frame.type in {int(event) for event in EventType}:
             if self._on_event is not None:
                 self._on_event(message)
@@ -228,8 +260,20 @@ class DeviceClient:
         del self._pending[frame.seq]
         if isinstance(message, Reply) and pending.msg_type == int(MsgType.HEARTBEAT):
             self._learn_offset(message, pending.sent_ms)
+        if (
+            isinstance(message, Reply)
+            and pending.msg_type == int(MsgType.STATUS_REQUEST)
+            and message.result is Result.OK
+        ):
+            block = StatusBlock.decode_payload(message.data)
+            if isinstance(block, StatusBlock):
+                self._note_state(block)
         if pending.future is not None and not pending.future.done():
             pending.future.set_result(message)
+
+    def _note_state(self, block: StatusBlock) -> None:
+        if block.state is not State.BOOT:
+            self._boot_ended.set()
 
     def _learn_offset(self, reply: Reply, sent_ms: int) -> None:
         if reply.result is not Result.OK:

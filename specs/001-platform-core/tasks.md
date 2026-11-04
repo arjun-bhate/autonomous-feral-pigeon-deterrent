@@ -475,7 +475,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Run engagements, compare the page figures with an independent calculation on the same samples.
 
-- [ ] T068 [US5] Add `GET /api/metrics` and `GET /api/metrics/{name}/series` to `api/routes_read.py` (counters with labels, gauges, distributions with `count`, `p50`, `p95`, `method: nearest-rank`; a distribution with no samples is omitted; series as `[[ts_us, value], ...]`).
+- [X] T068 [US5] Add `GET /api/metrics` and `GET /api/metrics/{name}/series` to `api/routes_read.py` (counters with labels, gauges, distributions with `count`, `p50`, `p95`, `method: nearest-rank`; a distribution with no samples is omitted; series as `[[ts_us, value], ...]`).
   - **Tests first**: `tests/integration/test_api_metrics.py`: run several engagements (cooldown respected via the fake clock); p50 and p95 equal an independent calculation on the same stored samples (100% of cases in a table of sample sets); a denied request raises `fire_requests_denied{reason}` by exactly one; fresh database returns no distributions (empty state, not zeros); each metric has a name and unit; series respects `since_us`.
   - **Covers**: FR-010, FR-011, SC-015
   - **Depends**: T049, T053, T056

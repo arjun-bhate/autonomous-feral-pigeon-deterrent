@@ -180,6 +180,52 @@ async def get_trace(trace_id: str, request: Request) -> dict[str, Any]:
     return {**trace_summary(detail), "spans": [span_item(s) for s in detail.spans]}
 
 
+# ---- metrics ----
+
+
+@router.get("/api/metrics")
+async def get_metrics(request: Request) -> dict[str, Any]:
+    """Counters (with labels), the latest gauge values, and p50/p95 of each distribution.
+
+    A distribution with no samples is left out; it is never shown as zeros.
+    """
+    summary = await read_database(get_platform(request), queries.metric_summary)
+    return {
+        "counters": [
+            {"name": c.name, "labels": c.labels, "total": c.total, "unit": c.unit}
+            for c in summary.counters
+        ],
+        "gauges": [
+            {"name": g.name, "value": g.value, "unit": g.unit, "read_at_us": g.read_at_us}
+            for g in summary.gauges
+        ],
+        "distributions": [
+            {
+                "name": d.name,
+                "unit": d.unit,
+                "count": d.count,
+                "p50": d.p50,
+                "p95": d.p95,
+                "method": d.method,
+            }
+            for d in summary.distributions
+        ],
+    }
+
+
+@router.get("/api/metrics/{name}/series")
+async def get_metric_series(
+    name: str, request: Request, since_us: Annotated[int | None, Query(ge=0)] = None
+) -> dict[str, Any]:
+    """Points ``[ts_us, value]`` for a chart, oldest first. An unknown name is 404."""
+    series = await read_database(
+        get_platform(request), lambda conn: queries.metric_series(conn, name, since_us)
+    )
+    if series is None:
+        raise ApiError(404, "METRIC_NOT_FOUND", f"There is no metric called {name!r}.")
+    return {"name": name, "unit": series.unit, "points": series.points}
+
+
 def _page(name: str):
     async def serve(request: Request):
         path = request.app.state.frontend_dir / name

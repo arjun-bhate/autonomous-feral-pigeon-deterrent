@@ -501,7 +501,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-012, FR-013, FR-036, FR-037, FR-030, SC-016
   - **Depends**: T056, T055, T045, T023
 
-- [ ] T072 Create `tests/integration/test_privacy.py`: no log, trace, metric or API response contains image data or secret-named fields; `git status --short` shows no `data/` or `*.sqlite3`; loopback bind only; no network call is made by the application (test with sockets blocked).
+- [X] T072 Create `tests/integration/test_privacy.py`: no log, trace, metric or API response contains image data or secret-named fields; `git status --short` shows no `data/` or `*.sqlite3`; loopback bind only; no network call is made by the application (test with sockets blocked).
   - **Tests first**: the test file is the deliverable.
   - **Covers**: FR-014, FR-012
   - **Depends**: T071

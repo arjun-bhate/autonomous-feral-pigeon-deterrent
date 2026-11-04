@@ -215,3 +215,70 @@ async def test_overview_js_is_served_as_javascript(tmp_path):
         response = await env.client.get("/static/js/overview.js")
         assert response.status_code == 200
         assert "javascript" in response.headers["content-type"]
+
+
+# ---- T063: the labelled placeholders and the recent-log list on the Overview ----
+
+
+def test_the_overview_has_the_camera_placeholder_saying_what_will_appear_and_when():
+    html = read("index.html")
+    assert 'id="camera-placeholder"' in html
+    assert "detection overlay" in html.lower()
+    assert "later feature" in html.lower()
+
+
+def test_the_overview_has_the_pi_health_panel_reading_not_connected():
+    html = read("index.html")
+    assert 'id="pi-health"' in html
+    panel = html.split('id="pi-health"')[1].split("</section>")[0]
+    assert "not connected" in panel.lower()
+
+
+def test_the_overview_has_the_recent_log_list_element():
+    html = read("index.html")
+    assert 'id="recent-logs"' in html
+    assert 'id="recent-logs-empty"' in html
+
+
+def test_overview_js_fills_the_recent_logs_from_the_snapshot_and_log_messages():
+    source = read("js/overview.js")
+    assert "data.recent_logs" in source
+    assert 'live.on("log"' in source
+    assert "RECENT_LOG_LIMIT = 50" in source
+
+
+def test_overview_js_shows_newest_first_and_keeps_only_fifty():
+    source = read("js/overview.js")
+    # the snapshot is newest LAST, so it is reversed; a new entry goes to the top
+    assert ".reverse()" in source
+    assert "RECENT_LOG_LIMIT" in source.split("function addLog")[1]
+
+
+def test_overview_js_writes_log_text_with_textcontent_only():
+    source = read("js/overview.js")
+    assert "createElement" in source
+    for risky in ("innerHTML", "insertAdjacentHTML", "document.write"):
+        assert risky not in source
+
+
+async def test_the_snapshot_holds_at_most_fifty_logs_newest_last_and_a_new_log_is_a_log_message(
+    tmp_path,
+):
+    import asyncio
+
+    from support.fake_socket import FakeSocket
+
+    async with api_env(tmp_path) as env:
+        for index in range(70):
+            env.platform.logger.info("api", f"line {index}")
+        socket = FakeSocket()
+        task = asyncio.create_task(env.app.state.hub.serve(socket))
+        await env.vt.advance(1)
+        logs = socket.sent[0]["data"]["recent_logs"]
+        assert len(logs) <= 50
+        assert logs[-1]["message"] == "line 69"
+        env.platform.logger.info("api", "a brand new line")
+        await env.vt.advance(5)
+        assert any(m["message"] == "a brand new line" for m in socket.of_type("log"))
+        socket.disconnect()
+        await task

@@ -420,7 +420,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-004, FR-005, FR-003, SC-004
   - **Depends**: T061, T056
 
-- [ ] T063 [P] [US2] Add the labelled placeholders to `frontend/index.html`: live camera feed with detection overlay (says what will appear and in which later feature), a Pi health panel reading "not connected", and the recent-log list (newest first, updating from `log` messages and the 50 entries in the `snapshot`).
+- [X] T063 [P] [US2] Add the labelled placeholders to `frontend/index.html`: live camera feed with detection overlay (says what will appear and in which later feature), a Pi health panel reading "not connected", and the recent-log list (newest first, updating from `log` messages and the 50 entries in the `snapshot`).
   - **Tests first**: `tests/integration/test_frontend_static.py` extended: `index.html` contains the camera placeholder text, the "not connected" Pi panel and the recent-log list element; an API test confirms the snapshot's `recent_logs` has at most 50 entries newest last and that a new log appears as a `log` message.
   - **Covers**: FR-003, FR-007
   - **Depends**: T061

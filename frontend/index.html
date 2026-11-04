@@ -61,6 +61,23 @@
           </div>
         </div>
       </section>
+      <section class="panel" aria-labelledby="camera-heading">
+        <h2 id="camera-heading">Live camera feed</h2>
+        <div class="placeholder" id="camera-placeholder">
+          Placeholder: the live camera feed with the detection overlay will appear here in a later feature
+          (detection is feature 002, the camera stream is feature 004). Nothing is shown yet.
+        </div>
+      </section>
+      <section class="panel" id="pi-health" aria-labelledby="pi-heading">
+        <h2 id="pi-heading">Raspberry Pi health</h2>
+        <p class="value unavailable" id="pi-health-state">not connected</p>
+        <p class="note">The Pi is added in a later feature; until then this panel stays "not connected".</p>
+      </section>
+      <section class="panel" aria-labelledby="logs-heading">
+        <h2 id="logs-heading">Recent log</h2>
+        <p class="note" id="recent-logs-empty">No log entries yet.</p>
+        <ul class="log-list" id="recent-logs"></ul>
+      </section>
     </main>
     <script type="module" src="/static/js/overview.js"></script>
   </body>

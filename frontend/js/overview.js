@@ -1,5 +1,5 @@
 // overview.js: the Overview page. It draws the laptop health tiles and the simulated
-// device panel (pan, tilt and system state).
+// device panel (pan, tilt and system state), and the list of recent log entries.
 //
 // It listens to the shared live connection (live.js):
 //   * "snapshot": sent after every (re)connect. It REPLACES everything shown.
@@ -7,6 +7,9 @@
 //   * "device":   the simulated device status (pan and tilt in centidegrees, a state name).
 //   * "device_offline": the simulator stopped. Pan, tilt and state show "unavailable"
 //     and a "Simulator not running" label appears. The last values are never kept.
+//   * "log":      one new log entry, added at the TOP of the list (newest first). The
+//     snapshot carries the last 50 entries, oldest first, and replaces the list.
+//     The list never holds more than 50.
 //   * connection lost: every slot shows "unavailable". The page never keeps showing
 //     an old number as if it were current.
 //
@@ -34,6 +37,7 @@ const STATE_NAMES = {
   ZONE_SETUP: "ZONE_SETUP",
   SAFE_ERROR: "SAFE/ERROR",
 };
+const RECENT_LOG_LIMIT = 50;
 const UNIT_SYMBOLS = { percent: "%", celsius: "°C" };
 
 function slotElements(slot) {
@@ -128,10 +132,51 @@ function showDevice(device) {
 const live = connectLive();
 showAllUnavailable();
 showDeviceOffline();
+// ---- the recent-log list ----
+
+function logRow(entry) {
+  const row = document.createElement("li");
+  row.className = "log-row";
+  row.dataset.severity = String(entry.severity);
+  const when = new Date(entry.ts_us / 1000).toLocaleTimeString();
+  row.textContent = `${when}  ${entry.severity}  ${entry.component}: ${entry.message}`;
+  return row;
+}
+
+function updateLogEmptyNote() {
+  const list = document.getElementById("recent-logs");
+  const note = document.getElementById("recent-logs-empty");
+  if (list && note) note.hidden = list.children.length > 0;
+}
+
+// Adds one entry at the top and drops the oldest rows beyond the limit.
+function addLog(entry) {
+  const list = document.getElementById("recent-logs");
+  if (!list) return;
+  list.prepend(logRow(entry));
+  while (list.children.length > RECENT_LOG_LIMIT) {
+    list.removeChild(list.lastChild);
+  }
+  updateLogEmptyNote();
+}
+
+// Replaces the whole list. The snapshot is oldest first, so it is reversed here.
+function showLogs(entries) {
+  const list = document.getElementById("recent-logs");
+  if (!list) return;
+  list.replaceChildren();
+  for (const entry of [...(entries || [])].reverse().slice(0, RECENT_LOG_LIMIT)) {
+    list.append(logRow(entry));
+  }
+  updateLogEmptyNote();
+}
+
 live.on("snapshot", (data) => {
   showHealth(data.health);
   showDevice(data.device);
+  showLogs(data.recent_logs);
 });
+live.on("log", (data) => addLog(data));
 live.on("health", (data) => showHealth(data));
 live.on("device", (data) => showDevice(data));
 live.on("device_offline", () => showDeviceOffline());

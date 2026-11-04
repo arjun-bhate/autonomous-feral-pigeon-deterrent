@@ -209,3 +209,26 @@ main {
 .log-row[data-severity="CRITICAL"] {
   color: var(--bad);
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.log-results {
+  max-height: none;
+}
+
+.log-row a {
+  color: var(--accent);
+}

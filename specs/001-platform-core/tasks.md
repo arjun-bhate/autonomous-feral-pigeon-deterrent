@@ -440,7 +440,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-008, SC-013, FR-007
   - **Depends**: T049, T056, T054
 
-- [ ] T065 [US3] Create `frontend/logs.html` and `frontend/js/logs.js`: filter controls for component (from the components endpoint), severity and trace id; combined filters; a "nothing matched" message (not an error); the trace id in each row links to `/traces?trace_id=...`.
+- [X] T065 [US3] Create `frontend/logs.html` and `frontend/js/logs.js`: filter controls for component (from the components endpoint), severity and trace id; combined filters; a "nothing matched" message (not an error); the trace id in each row links to `/traces?trace_id=...`.
   - **Tests first**: `tests/integration/test_frontend_static.py` extended: `logs.html` has the three filter controls, the empty-state text and the link pattern; `logs.js` builds the query exactly as the API expects (text test). Owner checks the Story 3 steps in the quickstart; finding one engagement's entries by trace id in under 10 seconds is a manual timing check in the owner checklist.
   - **Covers**: FR-008, SC-013
   - **Depends**: T064, T060

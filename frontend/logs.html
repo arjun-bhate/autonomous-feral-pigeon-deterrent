@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logs - Pigeon Deterrent</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Pigeon Deterrent</h1>
+      <nav class="site-nav">
+        <a href="/">Overview</a>
+        <a href="/logs" aria-current="page">Logs</a>
+        <a href="/traces">Traces</a>
+        <a href="/observability">Observability</a>
+      </nav>
+      <span id="connection-indicator" class="indicator" data-state="connecting">Connecting…</span>
+    </header>
+    <main>
+      <section class="panel" aria-labelledby="filters-heading">
+        <h2 id="filters-heading">Filters</h2>
+        <form id="log-filters" class="filters">
+          <label>Component
+            <select id="filter-component">
+              <option value="">Any</option>
+            </select>
+          </label>
+          <label>Severity
+            <select id="filter-severity">
+              <option value="">Any</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+          </label>
+          <label>Trace id
+            <input id="filter-trace-id" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 0123456789abcdef" />
+          </label>
+          <button type="submit">Apply</button>
+          <button type="button" id="filters-clear">Clear</button>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="results-heading">
+        <h2 id="results-heading">Log entries</h2>
+        <p class="banner" id="logs-error" hidden></p>
+        <p class="note" id="logs-empty" hidden>Nothing matched these filters.</p>
+        <ul class="log-list log-results" id="log-results"></ul>
+        <button type="button" id="logs-older" hidden>Load older entries</button>
+      </section>
+    </main>
+    <script type="module" src="/static/js/logs.js"></script>
+  </body>
+</html>

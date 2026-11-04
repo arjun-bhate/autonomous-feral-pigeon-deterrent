@@ -282,3 +282,81 @@ async def test_the_snapshot_holds_at_most_fifty_logs_newest_last_and_a_new_log_i
         assert any(m["message"] == "a brand new line" for m in socket.of_type("log"))
         socket.disconnect()
         await task
+
+
+# ---- T065: the Logs page ----
+
+
+def test_logs_html_has_the_three_filter_controls_and_the_results_area():
+    html = read("logs.html")
+    assert 'id="filter-component"' in html
+    assert 'id="filter-severity"' in html
+    assert 'id="filter-trace-id"' in html
+    assert 'id="log-results"' in html
+    assert 'id="connection-indicator"' in html
+    assert '<script type="module" src="/static/js/logs.js"></script>' in html
+    for link in ('href="/"', 'href="/logs"', 'href="/traces"', 'href="/observability"'):
+        assert link in html
+
+
+def test_logs_html_offers_every_severity_and_an_any_choice():
+    html = read("logs.html")
+    for severity in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        assert f'value="{severity}"' in html
+    assert 'value=""' in html
+
+
+def test_logs_html_has_the_nothing_matched_message_that_is_not_an_error():
+    html = read("logs.html")
+    assert 'id="logs-empty"' in html
+    assert "Nothing matched" in html
+    empty = html.split('id="logs-empty"')[1].split("</p>")[0]
+    assert "error" not in empty.lower()
+
+
+def test_logs_js_builds_the_query_exactly_as_the_api_expects():
+    source = read("js/logs.js")
+    assert "/api/logs/components" in source
+    assert "new URLSearchParams()" in source
+    for name in ("component", "severity", "trace_id", "limit", "before_id"):
+        assert f'"{name}"' in source
+    assert "`/api/logs?${" in source or '"/api/logs?"' in source
+    # only filters that have a value are sent, so "any" means no filter
+    assert "if (filters.component)" in source
+    assert "if (filters.severity)" in source
+    assert "if (filters.traceId)" in source
+
+
+def test_logs_js_links_each_trace_id_to_the_trace_page():
+    source = read("js/logs.js")
+    assert "/traces?trace_id=" in source
+    assert "encodeURIComponent(entry.trace_id)" in source
+    assert 'createElement("a")' in source
+
+
+def test_logs_js_shows_the_empty_message_when_the_page_has_no_items():
+    source = read("js/logs.js")
+    assert "logs-empty" in source
+    assert "items.length === 0" in source
+
+
+def test_logs_js_shows_a_real_error_message_when_the_request_fails():
+    source = read("js/logs.js")
+    assert "response.ok" in source
+    assert "logs-error" in source
+    assert 'id="logs-error"' in read("logs.html")
+
+
+def test_logs_js_writes_text_only_never_html():
+    source = read("js/logs.js")
+    for risky in ("innerHTML", "eval(", "document.write", "insertAdjacentHTML"):
+        assert risky not in source
+    assert "textContent" in source
+
+
+async def test_the_logs_page_and_script_are_served(tmp_path):
+    async with api_env(tmp_path, simulator=False) as env:
+        page = await env.client.get("/logs")
+        assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+        script = await env.client.get("/static/js/logs.js")
+        assert script.status_code == 200 and "javascript" in script.headers["content-type"]

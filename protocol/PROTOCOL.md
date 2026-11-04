@@ -373,6 +373,7 @@ All are named configuration values on the device. Vectors set them explicitly.
 | person_clear_holdoff_ms | 1000 (provisional) | Status hold-off: maximum age of the latest accepted person-clear status (section 5.3). Equal to the watchdog by default, see the note in 5.3. Re-tune in feature 004 |
 | person_reengage_delay_ms | 5000 (provisional) | Re-engage delay: how long person-clear must have been reported continuously before firing is allowed again (section 5.3). 0 disables it |
 | fire_ttl_ms | 500 | Default TTL a host puts on a fire request |
+| fire_request_safety_margin_ms | 20 | Host rule: the host stamps `issued_at_ms` this much earlier than its estimate of device time, so clock-offset jitter can never date a request in the future (a future date reads as very old and is denied `REQUEST_EXPIRED`). The device does not use it; the margin is spent from the request's `ttl_ms` |
 | min `duration_ms` | 500 | Fixed protocol constant, not configurable: the shortest accepted shot (section 4.1) |
 | command_ttl_ms | 500 | How long a host waits for a reply before treating the command as timed out (host rule; the engagement uses it for `esp32_ack`) |
 | per_shot_ms | 5000 (provisional) | Largest `duration_ms` a request may ask for; above it the request is denied `ON_TIME_LIMIT`. MUST be at least 500. The hardware on-time cutoff MUST be set at or above this value (docs/system-scope.md) |

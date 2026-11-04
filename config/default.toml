@@ -9,6 +9,7 @@ watchdog_ms = 1000                # provisional
 person_clear_holdoff_ms = 1000    # provisional
 person_reengage_delay_ms = 5000   # provisional; 0 disables the delay
 fire_ttl_ms = 500
+fire_request_safety_margin_ms = 20  # laptop stamps issued_at_ms this much earlier, so clock jitter never future-dates a request
 command_ttl_ms = 500
 per_shot_ms = 5000                # provisional; must be 500 or more
 cooldown_ms = 5000                # provisional; 0 disables the cooldown

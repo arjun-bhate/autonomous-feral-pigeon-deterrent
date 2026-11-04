@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     person_clear_holdoff_ms: NonNegative
     person_reengage_delay_ms: NonNegative
     fire_ttl_ms: Annotated[int, Field(ge=1, le=MAX_TTL_MS)]
+    fire_request_safety_margin_ms: NonNegative
     command_ttl_ms: Positive
     per_shot_ms: Annotated[int, Field(ge=MIN_DURATION_MS)]
     cooldown_ms: NonNegative
@@ -64,6 +65,14 @@ class Settings(BaseSettings):
     def _elevation_range_is_ordered(self) -> "Settings":
         if self.elevation_min_cdeg > self.elevation_max_cdeg:
             raise ValueError("elevation_min_cdeg must not exceed elevation_max_cdeg")
+        return self
+
+    @model_validator(mode="after")
+    def _safety_margin_is_shorter_than_the_fire_ttl(self) -> "Settings":
+        # The margin is spent from the request's time to live; as long as the ttl would
+        # make every request expired the moment it is stamped.
+        if self.fire_request_safety_margin_ms >= self.fire_ttl_ms:
+            raise ValueError("fire_request_safety_margin_ms must be shorter than fire_ttl_ms")
         return self
 
     @classmethod

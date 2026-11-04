@@ -9,7 +9,9 @@ from deterrent.link.client import CommandTimeout, DeviceClient
 from deterrent.protocol.codes import DenyReason, Fault, MsgType, RejectCode, Result, State
 from deterrent.protocol.framing import Frame, FrameReader
 from deterrent.protocol.messages import (
+    Arm,
     FireRequest,
+    FireStop,
     GenericReject,
     Heartbeat,
     Home,
@@ -222,7 +224,9 @@ async def test_issued_at_uses_the_device_time_base_not_the_laptop_clock():
     fires = [f for _, f in r.sent_frames() if f.type == int(MsgType.FIRE_REQUEST)]
     message = decode_host_message(fires[0].type, fires[0].payload)
     assert isinstance(message, FireRequest)
-    assert abs(message.issued_at_ms - r.device.now_ms()) <= 20
+    # within the 20 ms the test advanced plus the safety margin the client stamps earlier
+    margin = r.settings.fire_request_safety_margin_ms
+    assert abs(message.issued_at_ms - r.device.now_ms()) <= 20 + margin
     assert r.laptop_clock.now_ms() - message.issued_at_ms > 4_000_000  # clearly not laptop time
     await r.stop()
 
@@ -408,3 +412,64 @@ async def test_without_a_known_offset_a_fire_request_first_tries_to_sync_the_clo
     await vt.advance(1)
     assert (await task).result is Result.DENIED
     await client.stop()
+
+
+# ---- the safety margin on issued_at_ms ----
+
+
+async def _fire(rig: SimRig, **kw):
+    task = asyncio.create_task(rig.client.fire_request(0, 0, 500, **kw))
+    await rig.vt.advance(20)
+    return await task
+
+
+async def _ready_to_fire(rig: SimRig) -> None:
+    rig.device.set_key_level(True)
+    task = asyncio.create_task(rig.client.request(Arm()))
+    await rig.vt.advance(20)
+    await task
+    await rig.vt.advance(6000)  # the person re-engage delay (5 s) has passed
+
+
+async def test_issued_at_is_stamped_the_safety_margin_before_device_time(rig):
+    margin = rig.settings.fire_request_safety_margin_ms
+    assert margin == 20
+    sent_at = rig.client.device_time_ms()
+    await _fire(rig)
+    fires = [f for _, f in rig.sent_frames() if f.type == int(MsgType.FIRE_REQUEST)]
+    message = decode_host_message(fires[0].type, fires[0].payload)
+    assert message.issued_at_ms == sent_at - margin
+
+
+async def test_offset_jitter_after_a_fire_stop_gives_cooldown_not_request_expired(rig):
+    await _ready_to_fire(rig)
+    assert (await _fire(rig)).result is Result.GRANTED
+    stop = asyncio.create_task(rig.client.request(FireStop()))
+    await rig.vt.advance(20)
+    await stop
+    rig.client._offset_ms += 5  # the offset estimate is a few ms too high (clock jitter)
+    reply = await _fire(rig)
+    assert reply.result is Result.DENIED
+    assert reply.code == int(DenyReason.COOLDOWN_ACTIVE)
+
+
+async def test_a_genuinely_expired_request_is_still_denied(rig):
+    await _ready_to_fire(rig)
+    rig.client._offset_ms -= 600  # the stamp is 600 ms old, longer than the 500 ms ttl
+    reply = await _fire(rig)
+    assert reply.result is Result.DENIED
+    assert reply.code == int(DenyReason.REQUEST_EXPIRED)
+
+
+async def test_the_margin_does_not_push_a_fresh_request_past_its_ttl(rig):
+    await _ready_to_fire(rig)
+    reply = await _fire(rig)  # no jitter: the request is exactly the margin old on arrival
+    assert reply.result is Result.GRANTED
+
+
+async def test_a_ttl_not_longer_than_the_margin_is_expired_not_granted(rig):
+    # The margin is spent from the ttl, so a ttl that short cannot be met: failing safe.
+    await _ready_to_fire(rig)
+    reply = await _fire(rig, ttl_ms=rig.settings.fire_request_safety_margin_ms - 1)
+    assert reply.result is Result.DENIED
+    assert reply.code == int(DenyReason.REQUEST_EXPIRED)

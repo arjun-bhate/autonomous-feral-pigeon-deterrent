@@ -25,6 +25,7 @@ EXPECTED_DEFAULTS = {
     "person_clear_holdoff_ms": 1000,
     "person_reengage_delay_ms": 5000,
     "fire_ttl_ms": 500,
+    "fire_request_safety_margin_ms": 20,
     "command_ttl_ms": 500,
     "per_shot_ms": 5000,
     "cooldown_ms": 5000,
@@ -216,3 +217,16 @@ def test_config_module_does_not_read_dotenv_files():
 def test_default_path_is_inside_the_repository():
     assert isinstance(DEFAULT_CONFIG_PATH, Path)
     assert (DEFAULT_CONFIG_PATH.parents[1] / "pyproject.toml").is_file()
+
+
+def test_safety_margin_may_be_zero_but_not_negative():
+    assert Settings(fire_request_safety_margin_ms=0).fire_request_safety_margin_ms == 0
+    with pytest.raises(ValidationError):
+        Settings(fire_request_safety_margin_ms=-1)
+
+
+def test_safety_margin_must_be_shorter_than_the_fire_ttl():
+    # A margin as long as the ttl would make every request born expired.
+    Settings(fire_ttl_ms=500, fire_request_safety_margin_ms=499)
+    with pytest.raises(ValidationError):
+        Settings(fire_ttl_ms=500, fire_request_safety_margin_ms=500)

@@ -16,7 +16,9 @@ device replied. It does four jobs:
   from a provider function (default: always clear) that a future detector will supply.
 * **Device time.** A fire request carries ``issued_at_ms`` on the *device's* clock. The
   laptop and the device clocks differ, so the client learns the difference from the
-  device time in each heartbeat reply (the offset) and applies it.
+  device time in each heartbeat reply (the offset) and applies it, then subtracts
+  ``fire_request_safety_margin_ms`` so that an offset estimate that is a few
+  milliseconds too high can never make a request look like it comes from the future.
 
 **The client cannot decide anything.** It has no code path that grants or approves a
 fire request, and it never invents a reply: what ``request`` returns is a message
@@ -174,8 +176,14 @@ class DeviceClient:
         """
         if self._offset_ms is None:
             await self.sync_time()
+        # Stamp a little earlier than the estimate: the estimate can be a few ms ahead of
+        # the real device clock, and a request dated in the future would be denied
+        # REQUEST_EXPIRED. Being early only shortens the request's life by the margin.
+        issued_at_ms = (
+            self.device_time_ms() - self._settings.fire_request_safety_margin_ms
+        ) % U32_MODULUS
         message = FireRequest(
-            self.device_time_ms(),
+            issued_at_ms,
             ttl_ms if ttl_ms is not None else self._settings.fire_ttl_ms,
             intended_pan,
             intended_tilt,

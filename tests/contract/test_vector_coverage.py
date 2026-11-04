@@ -125,6 +125,7 @@ ENFORCED_TIMING = {
 }
 NOT_A_DEVICE_TIMING_RULE = {
     "command_ttl_ms": "a host rule: how long the host waits for a reply",
+    "fire_request_safety_margin_ms": "a host rule: how early the host stamps issued_at_ms",
     "aiming_error_cdeg": "an angle added to the zone margin, not a time",
     "max_zones": "a store limit, covered by the ZONE_STORE_FULL vectors",
     "max_points_per_zone": "a store limit, covered by the ZONE_TOO_MANY_POINTS vectors",

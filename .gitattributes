@@ -1,3 +1,7 @@
 * text=auto eol=lf
 # The vendored library must stay byte-for-byte identical (its checksum is recorded).
 frontend/vendor/chart.umd.min.js -text
+
+# Windows scripts need CRLF line endings to behave in cmd.exe and PowerShell.
+*.bat text eol=crlf
+*.ps1 text eol=crlf

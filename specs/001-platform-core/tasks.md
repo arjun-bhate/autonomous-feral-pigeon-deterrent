@@ -516,7 +516,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-038, SC-018
   - **Depends**: T070
 
-- [ ] T075 Run the whole quickstart (`specs/001-platform-core/quickstart.md`) and record the measured numbers for SC-001 to SC-022 (all 22) in a short results table in the task report; list any criterion not yet measured and why. Tell the owner about two quickstart corrections: (1) the "SC-001 to SC-019" line in section 6 must read "SC-001 to SC-022"; (2) the Story 6 command that names `tests/unit/test_zones.py` must name `tests/unit/test_zones_*.py` (the zone tests are split across `test_zones_upload.py`, `test_zones_commit.py` and `test_zones_store.py`).
+- [X] T075 Run the whole quickstart (`specs/001-platform-core/quickstart.md`) and record the measured numbers for SC-001 to SC-022 (all 22) in a short results table in the task report; list any criterion not yet measured and why. Tell the owner about two quickstart corrections: (1) the "SC-001 to SC-019" line in section 6 must read "SC-001 to SC-022"; (2) the Story 6 command that names `tests/unit/test_zones.py` must name `tests/unit/test_zones_*.py` (the zone tests are split across `test_zones_upload.py`, `test_zones_commit.py` and `test_zones_store.py`).
   - **Tests first**: `uv run ruff check`, `uv run ruff format --check` and the whole `uv run pytest` including `-m slow` pass; each quickstart edge check table row is run by hand and ticked.
   - **Covers**: FR-043, FR-045, SC-001, SC-002, SC-003, SC-004, SC-005, SC-016, SC-017, SC-018, SC-019, SC-020, SC-021, SC-022
   - **Depends**: T073, T072, T074, T069, T067, T065, T063, T062

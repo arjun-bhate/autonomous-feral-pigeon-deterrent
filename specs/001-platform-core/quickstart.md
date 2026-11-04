@@ -34,7 +34,7 @@ uv run pytest tests/unit -k arbitration
 uv run uvicorn deterrent.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000/ in a browser. Developer tools are on by default in this feature (`PIGEON_DEV_TOOLS=1`).
+Open http://127.0.0.1:8000/ in a browser. (Shortcut: double-click `start-dashboard.bat`, which starts the same command in a window titled "Pigeon Deterrent server" and opens the browser; `make-desktop-shortcut.ps1` puts a "Pigeon Deterrent" shortcut to it on your desktop.) Developer tools are on by default in this feature (`PIGEON_DEV_TOOLS=1`).
 
 Helper for the commands below (PowerShell):
 
@@ -71,8 +71,9 @@ Run several engagements (granted ones at least 5 seconds apart, because of the c
 
 ### Story 6: simulator on its own
 ```powershell
-uv run pytest tests/unit/test_arbitration.py tests/unit/test_zones.py -v
+uv run pytest tests/unit/test_arbitration.py (Get-ChildItem tests/unit/test_zones_*.py) -v
 ```
+(`tests/unit/test_zones_*.py` is the three zone test files: `test_zones_upload.py`, `test_zones_commit.py` and `test_zones_store.py`. PowerShell does not expand the `*` for programs, so `Get-ChildItem` lists the files.)
 **Expect** one passing test per denial reason and per zone rejection. Hand-driven checks: send `FIRE_REQUEST` through `/api/dev/command` in different conditions and confirm the denial **name** in the reply (for example `KEY_OFF`) is the reason you expect from the ladder table in [protocol/PROTOCOL.md](../../protocol/PROTOCOL.md). The API never shows numeric codes; the comparison of every numeric code byte with `protocol/reason-codes.json` is automated in `tests/contract`.
 
 ### Story 7: protocol and vectors
@@ -107,4 +108,4 @@ uv run pytest tests/architecture
 
 ## 6. Done criteria for the feature
 
-All of: section 1 passes; each story's walk-through behaves as described; edge checks behave as described; the measured success criteria SC-001 to SC-019 are recorded in the final task report with their numbers.
+All of: section 1 passes; each story's walk-through behaves as described; edge checks behave as described; the measured success criteria SC-001 to SC-022 are recorded in the final task report with their numbers.

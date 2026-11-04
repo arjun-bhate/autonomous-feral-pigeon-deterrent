@@ -32,7 +32,7 @@ from typing import Any, Protocol
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from deterrent.api.routes_read import health_payload, system_status
+from deterrent.api.routes_read import health_payload, log_item, system_status
 from deterrent.composition import Platform
 from deterrent.observability.store import LogRecord, StorageWarning
 
@@ -42,19 +42,6 @@ TICK_SECONDS = 1.0
 DEVICE_REFRESH_MS = 1000
 SNAPSHOT_LOGS = 50
 QUEUE_LIMIT = 100
-
-
-def log_item(record: LogRecord) -> dict[str, Any]:
-    return {
-        "id": record.id,
-        "ts_us": record.ts_us,
-        "component": record.component,
-        "severity": record.severity,
-        "message": record.message,
-        "trace_id": record.trace_id,
-        "span_id": record.span_id,
-        "fields": record.fields,
-    }
 
 
 class Socket(Protocol):

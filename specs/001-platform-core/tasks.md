@@ -435,7 +435,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Run an engagement, filter by component, severity and trace id, confirm exactly the matching entries.
 
-- [ ] T064 [US3] Add `GET /api/logs` and `GET /api/logs/components` to `api/routes_read.py` using `queries.py` (query `component`, `severity`, `trace_id`, `limit`, `before_id`; empty match returns `items: []` and `has_more` false).
+- [X] T064 [US3] Add `GET /api/logs` and `GET /api/logs/components` to `api/routes_read.py` using `queries.py` (query `component`, `severity`, `trace_id`, `limit`, `before_id`; empty match returns `items: []` and `has_more` false).
   - **Tests first**: `tests/integration/test_api_logs.py`: run an engagement through `/api/dev/engagement`, then each filter alone and combined returns exactly the matching entries; the engagement's trace id returns its entries in time order; no match returns an empty list with status 200; component list matches the components that logged; `limit` above 1000 is capped.
   - **Covers**: FR-008, SC-013, FR-007
   - **Depends**: T049, T056, T054

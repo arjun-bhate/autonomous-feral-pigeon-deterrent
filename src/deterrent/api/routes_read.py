@@ -2,15 +2,23 @@
 
 Nothing here changes the system, and nothing here can grant or perform a fire. The
 status endpoints read the platform's in-memory state, so they answer at once even if
-the disk is slow or failing.
+the disk is slow or failing. The history endpoints (logs, and later traces and metrics)
+read the database through a read-only connection, on a worker thread, so a slow disk
+never blocks the live channel; if the database cannot be read they answer 503.
 """
 
-from typing import Any
+import asyncio
+import sqlite3
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 
+from deterrent.api.errors import ApiError
 from deterrent.composition import Platform
+from deterrent.observability import queries
+from deterrent.observability.store import LogRecord
 
 router = APIRouter()
 
@@ -37,6 +45,37 @@ def system_status(platform: Platform, dev_tools: bool) -> dict[str, Any]:
     }
 
 
+async def read_database[T](platform: Platform, work: Callable[[sqlite3.Connection], T]) -> T:
+    """Run a read-only question on a worker thread; an unreadable database is a 503."""
+
+    def run() -> T:
+        conn = platform.store.open_read_connection()
+        try:
+            return work(conn)
+        finally:
+            conn.close()
+
+    try:
+        return await asyncio.to_thread(run)
+    except sqlite3.Error as error:
+        raise ApiError(
+            503, "STORAGE_UNAVAILABLE", "The log database cannot be read right now."
+        ) from error
+
+
+def log_item(record: LogRecord) -> dict[str, Any]:
+    return {
+        "id": record.id,
+        "ts_us": record.ts_us,
+        "component": record.component,
+        "severity": record.severity,
+        "message": record.message,
+        "trace_id": record.trace_id,
+        "span_id": record.span_id,
+        "fields": record.fields,
+    }
+
+
 def health_payload(platform: Platform) -> dict[str, Any]:
     return {"readings": platform.health_readings()}
 
@@ -54,6 +93,40 @@ async def device_status(request: Request) -> dict[str, Any]:
 @router.get("/api/system/status")
 async def get_system_status(request: Request) -> dict[str, Any]:
     return system_status(get_platform(request), request.app.state.settings.dev_tools)
+
+
+# ---- logs ----
+
+Severity = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+@router.get("/api/logs")
+async def get_logs(
+    request: Request,
+    component: str | None = None,
+    severity: Severity | None = None,
+    trace_id: str | None = None,
+    limit: Annotated[int, Query(ge=1)] = queries.DEFAULT_LOG_LIMIT,
+    before_id: int | None = None,
+) -> dict[str, Any]:
+    """The newest matching entries (oldest first within the page). Filters combine with AND."""
+    page = await read_database(
+        get_platform(request),
+        lambda conn: queries.query_logs(
+            conn,
+            component=component,
+            severity=severity,
+            trace_id=trace_id,
+            limit=limit,
+            before_id=before_id,
+        ),
+    )
+    return {"items": [log_item(record) for record in page.items], "has_more": page.has_more}
+
+
+@router.get("/api/logs/components")
+async def get_log_components(request: Request) -> dict[str, Any]:
+    return {"items": await read_database(get_platform(request), queries.list_components)}
 
 
 def _page(name: str):

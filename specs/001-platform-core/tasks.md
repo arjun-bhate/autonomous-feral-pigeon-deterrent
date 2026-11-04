@@ -511,7 +511,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: SC-001, SC-003, SC-002
   - **Depends**: T061
 
-- [ ] T074 Write `docs/platform-core-modules.md`: one plain-language paragraph per module (what it does, what it never does, which tests prove it), the safety-authority split diagram in words, and a short "how to explain this in an interview" list. No code.
+- [X] T074 Write `docs/platform-core-modules.md`: one plain-language paragraph per module (what it does, what it never does, which tests prove it), the safety-authority split diagram in words, and a short "how to explain this in an interview" list. No code.
   - **Tests first**: `tests/unit/test_docs_modules.py`: every Python module under `src/deterrent/` is mentioned by path in the document.
   - **Covers**: FR-038, SC-018
   - **Depends**: T070

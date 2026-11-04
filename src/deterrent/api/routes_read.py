@@ -129,6 +129,57 @@ async def get_log_components(request: Request) -> dict[str, Any]:
     return {"items": await read_database(get_platform(request), queries.list_components)}
 
 
+# ---- traces ----
+
+
+def trace_summary(item: queries.TraceSummary) -> dict[str, Any]:
+    return {
+        "trace_id": item.trace_id,
+        "started_us": item.started_us,
+        "ended_us": item.ended_us,
+        "total_us": item.total_us,
+        "outcome": item.outcome,
+        "deny_reason": item.deny_reason,
+        "simulated": item.simulated,
+    }
+
+
+def span_item(item: queries.SpanItem) -> dict[str, Any]:
+    return {
+        "span_id": item.span_id,
+        "position": item.position,
+        "name": item.name,
+        "started_us": item.started_us,
+        "duration_us": item.duration_us,
+        "status": item.status,
+        "simulated": item.simulated,
+        "attrs": item.attrs,
+    }
+
+
+@router.get("/api/traces")
+async def get_traces(
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=500)] = queries.DEFAULT_TRACE_LIMIT,
+) -> dict[str, Any]:
+    """The newest traces first."""
+    items = await read_database(
+        get_platform(request), lambda conn: queries.list_traces(conn, limit)
+    )
+    return {"items": [trace_summary(item) for item in items]}
+
+
+@router.get("/api/traces/{trace_id}")
+async def get_trace(trace_id: str, request: Request) -> dict[str, Any]:
+    """One trace with its spans in order. An unknown id is 404 TRACE_NOT_FOUND."""
+    detail = await read_database(
+        get_platform(request), lambda conn: queries.get_trace(conn, trace_id)
+    )
+    if detail is None:
+        raise ApiError(404, "TRACE_NOT_FOUND", f"There is no trace with id {trace_id!r}.")
+    return {**trace_summary(detail), "spans": [span_item(s) for s in detail.spans]}
+
+
 def _page(name: str):
     async def serve(request: Request):
         path = request.app.state.frontend_dir / name

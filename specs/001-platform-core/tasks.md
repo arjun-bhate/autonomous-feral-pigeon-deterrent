@@ -455,7 +455,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Trigger an engagement, open its trace, confirm eight steps in order with durations that add up to the total.
 
-- [ ] T066 [US4] Add `GET /api/traces` and `GET /api/traces/{trace_id}` to `api/routes_read.py` (list newest first, detail with always eight spans, `TRACE_NOT_FOUND` as 404).
+- [X] T066 [US4] Add `GET /api/traces` and `GET /api/traces/{trace_id}` to `api/routes_read.py` (list newest first, detail with always eight spans, `TRACE_NOT_FOUND` as 404).
   - **Tests first**: `tests/integration/test_api_traces.py`: after an engagement the trace has eight spans in order, `total_us` equals last end minus first start, `simulated` true; a denied engagement shows `esp32_ack` `DENIED` with the reason and `effector_action` `NOT_RUN` "no action"; a dropped-reply engagement shows `TIMEOUT` and the step is present; unknown id gives 404 `TRACE_NOT_FOUND`; the id from `/api/logs` opens the same engagement; over 100% of a batch of 20 test engagements the durations add up to the total.
   - **Covers**: FR-009, SC-014, SC-013
   - **Depends**: T049, T053, T056

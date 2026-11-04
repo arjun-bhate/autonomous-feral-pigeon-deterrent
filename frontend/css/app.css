@@ -254,3 +254,16 @@ main {
 .data-table a {
   color: var(--accent);
 }
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.chart-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}

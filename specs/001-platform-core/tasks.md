@@ -480,7 +480,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-010, FR-011, SC-015
   - **Depends**: T049, T053, T056
 
-- [ ] T069 [US5] Create `frontend/observability.html` and `frontend/js/observability.js`: counters, gauges and p50/p95 tables with names and units, Chart.js lines for gauges, an empty state when there are no samples, and the "simulated" label on `e2e_latency_simulated`.
+- [X] T069 [US5] Create `frontend/observability.html` and `frontend/js/observability.js`: counters, gauges and p50/p95 tables with names and units, Chart.js lines for gauges, an empty state when there are no samples, and the "simulated" label on `e2e_latency_simulated`.
   - **Tests first**: `tests/integration/test_frontend_static.py` extended: page contains the empty-state wording, units and the simulated label (text tests); owner compares figures against the API output in the quickstart Story 5 steps.
   - **Covers**: FR-010, FR-011, SC-015
   - **Depends**: T068, T060

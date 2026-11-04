@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Observability - Pigeon Deterrent</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Pigeon Deterrent</h1>
+      <nav class="site-nav">
+        <a href="/">Overview</a>
+        <a href="/logs">Logs</a>
+        <a href="/traces">Traces</a>
+        <a href="/observability" aria-current="page">Observability</a>
+      </nav>
+      <span id="connection-indicator" class="indicator" data-state="connecting">Connecting…</span>
+    </header>
+    <main>
+      <p class="banner" id="metrics-error" hidden></p>
+      <section class="panel" aria-labelledby="distributions-heading">
+        <h2 id="distributions-heading">Latency and spread (p50 and p95)</h2>
+        <p class="note">
+          p50 is the middle value and p95 is the value 95% of samples are at or below, both by the
+          nearest-rank method. Figures marked "simulated" come from made-up timings, not real hardware.
+        </p>
+        <p class="note" id="distributions-empty" hidden>
+          No samples yet. Run a simulated engagement to see latency figures; nothing is shown as zero
+          until a real sample exists.
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Metric</th><th>Samples</th><th>p50</th><th>p95</th><th>Unit</th><th></th></tr>
+          </thead>
+          <tbody id="distributions-body"></tbody>
+        </table>
+      </section>
+      <section class="panel" aria-labelledby="counters-heading">
+        <h2 id="counters-heading">Counters</h2>
+        <p class="note" id="counters-empty" hidden>No counts yet.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Metric</th><th>Labels</th><th>Total</th><th>Unit</th></tr>
+          </thead>
+          <tbody id="counters-body"></tbody>
+        </table>
+      </section>
+      <section class="panel" aria-labelledby="gauges-heading">
+        <h2 id="gauges-heading">Gauges (latest value)</h2>
+        <p class="note" id="gauges-empty" hidden>No readings saved yet.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Metric</th><th>Value</th><th>Unit</th><th>Read at</th></tr>
+          </thead>
+          <tbody id="gauges-body"></tbody>
+        </table>
+        <div class="chart-grid" id="gauge-charts"></div>
+      </section>
+    </main>
+    <script src="/static/vendor/chart.umd.min.js"></script>
+    <script type="module" src="/static/js/observability.js"></script>
+  </body>
+</html>

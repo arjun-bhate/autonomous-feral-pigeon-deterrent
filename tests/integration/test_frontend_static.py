@@ -435,3 +435,74 @@ async def test_the_traces_page_and_script_are_served(tmp_path):
         assert page.status_code == 200 and "text/html" in page.headers["content-type"]
         script = await env.client.get("/static/js/traces.js")
         assert script.status_code == 200 and "javascript" in script.headers["content-type"]
+
+
+# ---- T069: the Observability page ----
+
+
+def test_observability_html_has_the_three_tables_the_charts_and_the_navigation():
+    html = read("observability.html")
+    for element in (
+        "counters-body",
+        "gauges-body",
+        "distributions-body",
+        "gauge-charts",
+        "metrics-error",
+        "connection-indicator",
+    ):
+        assert f'id="{element}"' in html
+    for link in ('href="/"', 'href="/logs"', 'href="/traces"', 'href="/observability"'):
+        assert link in html
+
+
+def test_observability_html_loads_the_vendored_chartjs_before_its_own_module():
+    html = read("observability.html")
+    chart = html.index('src="/static/vendor/chart.umd.min.js"')
+    module = html.index('<script type="module" src="/static/js/observability.js"></script>')
+    assert chart < module
+    assert "http://" not in html and "https://" not in html  # nothing loaded from the internet
+
+
+def test_observability_html_has_the_honest_empty_state_wording():
+    html = read("observability.html")
+    assert 'id="distributions-empty"' in html
+    assert "No samples yet" in html
+    assert "p50" in html and "p95" in html and "nearest-rank" in html
+
+
+def test_observability_js_shows_names_units_and_the_simulated_label():
+    source = read("js/observability.js")
+    assert "item.unit" in source
+    assert "e2e_latency_simulated" in source
+    assert "simulated" in source
+    assert "distributions-empty" in source
+    assert "item.p50" in source and "item.p95" in source and "item.count" in source
+
+
+def test_observability_js_draws_gauge_lines_with_chartjs_from_the_series_endpoint():
+    source = read("js/observability.js")
+    assert "new Chart(" in source
+    assert 'type: "line"' in source
+    assert "/api/metrics/${encodeURIComponent(" in source
+    assert "/series" in source
+    assert '"/api/metrics"' in source
+
+
+def test_observability_js_never_shows_zero_for_a_distribution_without_samples():
+    source = read("js/observability.js")
+    assert "distributions.length === 0" in source
+
+
+def test_observability_js_writes_text_only_never_html():
+    source = read("js/observability.js")
+    for risky in ("innerHTML", "eval(", "document.write", "insertAdjacentHTML"):
+        assert risky not in source
+    assert "textContent" in source
+
+
+async def test_the_observability_page_and_script_are_served(tmp_path):
+    async with api_env(tmp_path, simulator=False) as env:
+        page = await env.client.get("/observability")
+        assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+        script = await env.client.get("/static/js/observability.js")
+        assert script.status_code == 200 and "javascript" in script.headers["content-type"]

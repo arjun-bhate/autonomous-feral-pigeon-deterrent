@@ -496,7 +496,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: SC-019, FR-021, FR-044
   - **Depends**: T056, T053, T029
 
-- [ ] T071 Create `tests/integration/test_restart_and_storage.py`: restart persistence (logs, traces, metrics and the simulator's zones are still there after the store and device are rebuilt on the same folders; the laptop side never opens `zone_store.sqlite3`), storage-fault run (full and locked; live websocket keeps going; warning within 10 s; zero crashes; the simulator's safety decisions are unchanged during the fault), and simulator zone storage full or locked rejects the upload with the old zones intact.
+- [X] T071 Create `tests/integration/test_restart_and_storage.py`: restart persistence (logs, traces, metrics and the simulator's zones are still there after the store and device are rebuilt on the same folders; the laptop side never opens `zone_store.sqlite3`), storage-fault run (full and locked; live websocket keeps going; warning within 10 s; zero crashes; the simulator's safety decisions are unchanged during the fault), and simulator zone storage full or locked rejects the upload with the old zones intact.
   - **Tests first**: the test file is the deliverable (tests first means written before any fix it exposes).
   - **Covers**: FR-012, FR-013, FR-036, FR-037, FR-030, SC-016
   - **Depends**: T056, T055, T045, T023

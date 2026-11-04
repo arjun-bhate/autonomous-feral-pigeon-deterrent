@@ -491,7 +491,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 ## Phase 11: Polish and cross-cutting checks
 
-- [ ] T070 Create `tests/architecture/test_boundaries.py`: (a) `deterrent.simulator` imports no `fastapi`, `observability`, `api`, `composition`, `link` or `engagement`; (b) only `simulator/arbitration.py` can produce a GRANTED result and only `simulator/device.py` switches the effector, found by scanning source for the grant result constant and effector setter; (c) no module under `api/`, `link/`, `engagement/`, `health/`, `observability/` or `frontend/` contains a grant path, the string GRANTED is only read from replies; (d) only `composition.py` imports both `simulator` and `observability`; (e) `tests/` and `protocol/` are not imported by `src/`.
+- [X] T070 Create `tests/architecture/test_boundaries.py`: (a) `deterrent.simulator` imports no `fastapi`, `observability`, `api`, `composition`, `link` or `engagement`; (b) only `simulator/arbitration.py` can produce a GRANTED result and only `simulator/device.py` switches the effector, found by scanning source for the grant result constant and effector setter; (c) no module under `api/`, `link/`, `engagement/`, `health/`, `observability/` or `frontend/` contains a grant path, the string GRANTED is only read from replies; (d) only `composition.py` imports both `simulator` and `observability`; (e) `tests/` and `protocol/` are not imported by `src/`.
   - **Tests first**: the test file is the deliverable; also a negative test on a temporary source tree where a fake `api` module imports the effector setter and the check fails.
   - **Covers**: SC-019, FR-021, FR-044
   - **Depends**: T056, T053, T029

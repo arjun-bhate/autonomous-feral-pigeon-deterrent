@@ -460,7 +460,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
   - **Covers**: FR-009, SC-014, SC-013
   - **Depends**: T049, T053, T056
 
-- [ ] T067 [US4] Create `frontend/traces.html` and `frontend/js/traces.js`: trace list, and `?trace_id=` detail showing the eight steps in order with start, duration and status, the denial reason on the acknowledgement step, "no action" on the effector step, "incomplete" or "timed out" for unfinished steps, the total, and a "simulated" label on made-up timings.
+- [X] T067 [US4] Create `frontend/traces.html` and `frontend/js/traces.js`: trace list, and `?trace_id=` detail showing the eight steps in order with start, duration and status, the denial reason on the acknowledgement step, "no action" on the effector step, "incomplete" or "timed out" for unfinished steps, the total, and a "simulated" label on made-up timings.
   - **Tests first**: `tests/integration/test_frontend_static.py` extended: `traces.html` and `traces.js` contain the eight step names in order, the "simulated" label, and the incomplete/timed-out wording (text tests). Owner checks Story 4 steps from the quickstart in the browser.
   - **Covers**: FR-009, SC-014
   - **Depends**: T066, T060

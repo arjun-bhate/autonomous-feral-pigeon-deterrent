@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Traces - Pigeon Deterrent</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>Pigeon Deterrent</h1>
+      <nav class="site-nav">
+        <a href="/">Overview</a>
+        <a href="/logs">Logs</a>
+        <a href="/traces" aria-current="page">Traces</a>
+        <a href="/observability">Observability</a>
+      </nav>
+      <span id="connection-indicator" class="indicator" data-state="connecting">Connecting…</span>
+    </header>
+    <main>
+      <p class="banner" id="trace-error" hidden></p>
+      <section class="panel" aria-labelledby="trace-list-heading">
+        <h2 id="trace-list-heading">Engagements</h2>
+        <p class="note">
+          Every engagement is recorded as eight steps, always in this order: capture, encode,
+          network, inference, decision, command, esp32_ack, effector_action. Timings marked
+          "simulated" are made up, because there is no camera or detector yet.
+        </p>
+        <p class="note" id="trace-list-empty" hidden>No engagements recorded yet.</p>
+        <table class="data-table" id="trace-list">
+          <thead>
+            <tr><th>Trace id</th><th>Started</th><th>Outcome</th><th>Total</th></tr>
+          </thead>
+          <tbody id="trace-list-body"></tbody>
+        </table>
+      </section>
+      <section class="panel" id="trace-detail" aria-labelledby="trace-detail-heading" hidden>
+        <h2 id="trace-detail-heading">Trace</h2>
+        <p id="trace-summary"></p>
+        <table class="data-table">
+          <thead>
+            <tr><th>#</th><th>Step</th><th>Start</th><th>Duration</th><th>Status</th><th>Details</th></tr>
+          </thead>
+          <tbody id="trace-steps"></tbody>
+        </table>
+        <p id="trace-total"></p>
+        <p><a href="/logs" id="trace-logs-link">Log entries for this trace</a></p>
+      </section>
+    </main>
+    <script type="module" src="/static/js/traces.js"></script>
+  </body>
+</html>

@@ -232,3 +232,25 @@ main {
 .log-row a {
   color: var(--accent);
 }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.data-table a {
+  color: var(--accent);
+}

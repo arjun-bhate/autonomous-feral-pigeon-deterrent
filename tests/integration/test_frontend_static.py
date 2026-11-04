@@ -360,3 +360,78 @@ async def test_the_logs_page_and_script_are_served(tmp_path):
         assert page.status_code == 200 and "text/html" in page.headers["content-type"]
         script = await env.client.get("/static/js/logs.js")
         assert script.status_code == 200 and "javascript" in script.headers["content-type"]
+
+
+# ---- T067: the Traces page ----
+
+TRACE_STEPS = (
+    "capture",
+    "encode",
+    "network",
+    "inference",
+    "decision",
+    "command",
+    "esp32_ack",
+    "effector_action",
+)
+
+
+def test_traces_html_has_the_list_the_detail_area_and_the_navigation():
+    html = read("traces.html")
+    for element in ("trace-list", "trace-detail", "trace-error", "connection-indicator"):
+        assert f'id="{element}"' in html
+    assert '<script type="module" src="/static/js/traces.js"></script>' in html
+    for link in ('href="/"', 'href="/logs"', 'href="/traces"', 'href="/observability"'):
+        assert link in html
+
+
+def test_traces_html_names_the_eight_steps_in_order():
+    html = read("traces.html")
+    positions = [html.index(name) for name in TRACE_STEPS]
+    assert positions == sorted(positions)
+
+
+def test_traces_js_lists_the_eight_steps_in_order():
+    source = read("js/traces.js")
+    block = re.search(r"const STEP_NAMES = \[(.*?)\];", source, re.S)
+    assert block, "traces.js must define STEP_NAMES"
+    assert re.findall(r'"(\w+)"', block.group(1)) == list(TRACE_STEPS)
+
+
+def test_traces_js_carries_the_simulated_label_and_the_unfinished_wording():
+    source = read("js/traces.js")
+    assert "simulated" in source
+    assert "no action" in source
+    assert "incomplete" in source
+    assert "timed out" in source
+    assert "TIMEOUT" in source and "NOT_RUN" in source and "DENIED" in source
+    assert "REJECTED" in source
+
+
+def test_traces_js_shows_the_denial_reason_and_the_total():
+    source = read("js/traces.js")
+    assert "attrs.reason" in source
+    assert "attrs.reject_code" in source
+    assert "total_us" in source
+
+
+def test_traces_js_reads_the_trace_id_from_the_address_and_calls_the_right_endpoints():
+    source = read("js/traces.js")
+    assert 'get("trace_id")' in source
+    assert "/api/traces/${encodeURIComponent(" in source
+    assert '"/api/traces"' in source or "/api/traces?" in source
+
+
+def test_traces_js_writes_text_only_never_html():
+    source = read("js/traces.js")
+    for risky in ("innerHTML", "eval(", "document.write", "insertAdjacentHTML"):
+        assert risky not in source
+    assert "textContent" in source
+
+
+async def test_the_traces_page_and_script_are_served(tmp_path):
+    async with api_env(tmp_path, simulator=False) as env:
+        page = await env.client.get("/traces")
+        assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+        script = await env.client.get("/static/js/traces.js")
+        assert script.status_code == 200 and "javascript" in script.headers["content-type"]

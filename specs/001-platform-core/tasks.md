@@ -415,7 +415,7 @@ Paths are exactly those in plan.md "Source Code". Files plan.md or the contracts
 
 **Independent test**: Open the Overview with the simulator running; move it; see the values follow within 1 s; stop it and see "unavailable".
 
-- [ ] T062 [US2] Add the live device panel to `frontend/index.html` and `frontend/js/overview.js`: pan angle, tilt angle (shown in degrees from centidegrees) and system state from `device` messages; state shown only as one of the twelve names from `codes.py` (SAFE_ERROR displayed as "SAFE/ERROR"); when the simulator is stopped show "unavailable" for all three (never the last value) and an obvious "simulator not running" label.
+- [X] T062 [US2] Add the live device panel to `frontend/index.html` and `frontend/js/overview.js`: pan angle, tilt angle (shown in degrees from centidegrees) and system state from `device` messages; state shown only as one of the twelve names from `codes.py` (SAFE_ERROR displayed as "SAFE/ERROR"); when the simulator is stopped show "unavailable" for all three (never the last value) and an obvious "simulator not running" label.
   - **Tests first**: `tests/integration/test_device_panel.py`: with the websocket, a MOVE through `/api/dev/command` is visible in `device` messages within 1 s; every one of the 12 states renders to a name via a text test of the state map in `overview.js` and no unnamed value is possible; `device_offline` clears pan, tilt and state (text test of the handler); `index.html` has ids for pan, tilt, state and the not-running label.
   - **Covers**: FR-004, FR-005, FR-003, SC-004
   - **Depends**: T061, T056

@@ -1,8 +1,12 @@
-// overview.js: the Overview page. For now it draws the laptop health tiles.
+// overview.js: the Overview page. It draws the laptop health tiles and the simulated
+// device panel (pan, tilt and system state).
 //
 // It listens to the shared live connection (live.js):
 //   * "snapshot": sent after every (re)connect. It REPLACES everything shown.
 //   * "health":   sent every second with the newest readings.
+//   * "device":   the simulated device status (pan and tilt in centidegrees, a state name).
+//   * "device_offline": the simulator stopped. Pan, tilt and state show "unavailable"
+//     and a "Simulator not running" label appears. The last values are never kept.
 //   * connection lost: every slot shows "unavailable". The page never keeps showing
 //     an old number as if it were current.
 //
@@ -13,6 +17,23 @@ import { connectLive } from "./live.js";
 
 const UNAVAILABLE_TEXT = "unavailable";
 const SLOTS = ["cpu_load", "gpu_load", "ram_used", "cpu_temp", "gpu_temp"];
+// The twelve device states (codes.py State). The device sends the name; the page shows
+// only a name from this list. SAFE_ERROR is written SAFE/ERROR. A name not in the list
+// is shown as "unavailable", never as a raw value.
+const STATE_NAMES = {
+  BOOT: "BOOT",
+  HOMING: "HOMING",
+  DISARMED: "DISARMED",
+  SCANNING: "SCANNING",
+  CANDIDATE: "CANDIDATE",
+  SLEW: "SLEW",
+  CONFIRM: "CONFIRM",
+  TRACK: "TRACK",
+  DETER: "DETER",
+  COOLDOWN: "COOLDOWN",
+  ZONE_SETUP: "ZONE_SETUP",
+  SAFE_ERROR: "SAFE/ERROR",
+};
 const UNIT_SYMBOLS = { percent: "%", celsius: "°C" };
 
 function slotElements(slot) {
@@ -52,12 +73,71 @@ function showAllUnavailable() {
   showHealth(null);
 }
 
+// ---- the simulated device panel ----
+
+function setDeviceText(id, text, available) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  element.textContent = text;
+  element.classList.toggle("unavailable", !available);
+}
+
+function setDeviceUnit(id, text) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = text;
+}
+
+function showAngle(id, centidegrees) {
+  if (typeof centidegrees !== "number") {
+    setDeviceText(id, UNAVAILABLE_TEXT, false);
+    setDeviceUnit(`${id}-unit`, "");
+    return;
+  }
+  setDeviceText(id, (centidegrees / 100).toFixed(2), true);
+  setDeviceUnit(`${id}-unit`, "°");
+}
+
+function setNotRunningLabel(visible) {
+  const label = document.getElementById("device-not-running");
+  if (label) label.hidden = !visible;
+}
+
+// The simulator is not running (or the server cannot be reached): nothing is known, so
+// all three values say "unavailable" and the label says why.
+function showDeviceOffline() {
+  setDeviceText("device-pan", UNAVAILABLE_TEXT, false);
+  setDeviceUnit("device-pan-unit", "");
+  setDeviceText("device-tilt", UNAVAILABLE_TEXT, false);
+  setDeviceUnit("device-tilt-unit", "");
+  setDeviceText("device-state", UNAVAILABLE_TEXT, false);
+  setNotRunningLabel(true);
+}
+
+function showDevice(device) {
+  if (!device || device.running !== true) {
+    showDeviceOffline();
+    return;
+  }
+  setNotRunningLabel(false);
+  showAngle("device-pan", device.pan_cdeg);
+  showAngle("device-tilt", device.tilt_cdeg);
+  const known = typeof device.state === "string" && Object.hasOwn(STATE_NAMES, device.state);
+  setDeviceText("device-state", known ? STATE_NAMES[device.state] : UNAVAILABLE_TEXT, known);
+}
+
 const live = connectLive();
 showAllUnavailable();
-live.on("snapshot", (data) => showHealth(data.health));
+showDeviceOffline();
+live.on("snapshot", (data) => {
+  showHealth(data.health);
+  showDevice(data.device);
+});
 live.on("health", (data) => showHealth(data));
+live.on("device", (data) => showDevice(data));
+live.on("device_offline", () => showDeviceOffline());
 live.on("connection", (state) => {
   if (state === "disconnected") {
     showAllUnavailable();
+    showDeviceOffline();
   }
 });

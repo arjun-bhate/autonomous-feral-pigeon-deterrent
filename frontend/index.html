@@ -43,6 +43,24 @@
           </div>
         </div>
       </section>
+      <section class="panel" aria-labelledby="device-heading">
+        <h2 id="device-heading">Simulated device</h2>
+        <p id="device-not-running" class="banner" hidden>Simulator not running</p>
+        <div class="tiles">
+          <div class="tile" id="device-pan-tile">
+            <div class="label">Pan angle</div>
+            <div><span class="value unavailable" id="device-pan">unavailable</span><span class="unit" id="device-pan-unit"></span></div>
+          </div>
+          <div class="tile" id="device-tilt-tile">
+            <div class="label">Tilt angle</div>
+            <div><span class="value unavailable" id="device-tilt">unavailable</span><span class="unit" id="device-tilt-unit"></span></div>
+          </div>
+          <div class="tile" id="device-state-tile">
+            <div class="label">System state</div>
+            <div><span class="value unavailable" id="device-state">unavailable</span></div>
+          </div>
+        </div>
+      </section>
     </main>
     <script type="module" src="/static/js/overview.js"></script>
   </body>
